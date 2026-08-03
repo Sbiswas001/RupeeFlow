@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.RupeeFlow" parent="Theme.MaterialComponents.Light" />
+</resources>

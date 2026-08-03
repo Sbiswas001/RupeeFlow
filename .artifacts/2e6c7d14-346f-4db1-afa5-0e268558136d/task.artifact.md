@@ -1,0 +1,23 @@
+# Tasks for Stage 8: Transaction Management & Attachments
+
+- `[x]` Data & Domain Layer
+    - `[x]` Add `Attachment` domain model
+    - `[x]` Add `AttachmentMapper`
+    - `[x]` Update `Transaction` domain model with `note`, `accountId`, and `categoryId`
+    - `[x]` Update `TransactionEntity` with `title` and `note`
+    - `[x]` Update `TransactionMapper`
+    - `[x]` Update `TransactionRepository` and its implementation with attachment support
+    - `[x]` Increment database version to 6
+- `[x]` Navigation & Infrastructure
+    - `[x]` Update `NavRoutes.kt` with `TransactionDetail` and `EditTransaction`
+    - `[x]` Update `MainActivity.kt` with new routes
+- `[x]` UI Implementation
+    - `[x]` Create `TransactionDetailScreen.kt`
+    - `[x]` Update `AddTransactionViewModel.kt` to support Edit mode and `note`
+    - `[x]` Update `AddTransactionScreen.kt` with `note` field and Edit mode support
+    - `[x]` Update `TransactionItem.kt` to be interactive
+    - `[x]` Update `DashboardScreen.kt` to navigate to details
+    - `[x]` Update `TransactionsScreen.kt` to navigate to details
+- `[x]` Attachments UI
+    - `[x]` Add attachment picker to `AddTransactionScreen`
+    - `[x]` Display attachments in `TransactionDetailScreen`

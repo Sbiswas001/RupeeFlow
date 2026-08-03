@@ -1,0 +1,93 @@
+package sayan.apps.rupeeflow.core.database.repository
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import sayan.apps.rupeeflow.core.database.dao.*
+import sayan.apps.rupeeflow.core.database.entity.RecentSearchEntity
+import sayan.apps.rupeeflow.core.database.mapper.toDomainModel
+import sayan.apps.rupeeflow.domain.model.SearchFilters
+import sayan.apps.rupeeflow.domain.model.SearchResult
+import sayan.apps.rupeeflow.domain.repository.SearchRepository
+import javax.inject.Inject
+
+class SearchRepositoryImpl @Inject constructor(
+    private val transactionDao: TransactionDao,
+    private val accountDao: AccountDao,
+    private val categoryDao: CategoryDao,
+    private val utilityDao: UtilityDao,
+    private val planningDao: PlanningDao,
+    private val recentSearchDao: RecentSearchDao
+) : SearchRepository {
+
+    override fun globalSearch(filters: SearchFilters): Flow<List<SearchResult>> {
+        val transactionsFlow = transactionDao.searchTransactions(
+            query = filters.query,
+            minAmount = filters.minAmount,
+            maxAmount = filters.maxAmount,
+            startDate = filters.startDate,
+            endDate = filters.endDate,
+            categoryId = filters.categoryId,
+            accountId = filters.accountId,
+            type = filters.type,
+            isRecurring = filters.isRecurring
+        )
+
+        val accountsFlow = accountDao.searchAccounts(filters.query)
+        val categoriesFlow = categoryDao.searchCategories(filters.query)
+        val merchantsFlow = utilityDao.searchMerchants(filters.query)
+        val recurringFlow = utilityDao.searchRecurringItems(filters.query)
+        val budgetsFlow = planningDao.searchBudgets(filters.query)
+        val goalsFlow = planningDao.searchGoals(filters.query)
+
+        return combine(
+            transactionsFlow,
+            accountsFlow,
+            categoriesFlow,
+            merchantsFlow,
+            recurringFlow,
+            budgetsFlow,
+            goalsFlow
+        ) { args: Array<Any?> ->
+            val transactions = args[0] as List<TransactionWithCategory>
+            val accounts = args[1] as List<sayan.apps.rupeeflow.core.database.entity.AccountEntity>
+            val categories = args[2] as List<sayan.apps.rupeeflow.core.database.entity.CategoryEntity>
+            val merchants = args[3] as List<sayan.apps.rupeeflow.core.database.entity.MerchantEntity>
+            val recurring = args[4] as List<sayan.apps.rupeeflow.core.database.entity.RecurringEntity>
+            val budgets = args[5] as List<sayan.apps.rupeeflow.core.database.entity.BudgetEntity>
+            val goals = args[6] as List<sayan.apps.rupeeflow.core.database.entity.GoalEntity>
+
+            val results = mutableListOf<SearchResult>()
+            
+            results.addAll(transactions.map { SearchResult.TransactionResult(it.toDomainModel()) })
+            results.addAll(accounts.map { SearchResult.AccountResult(it.toDomainModel()) })
+            results.addAll(categories.map { SearchResult.CategoryResult(it.toDomainModel()) })
+            results.addAll(merchants.map { SearchResult.MerchantResult(it.name, it.logoUrl) })
+            results.addAll(recurring.map { SearchResult.RecurringResult(it.toDomainModel()) })
+            results.addAll(budgets.map { SearchResult.BudgetResult(it.toDomainModel(), "Category") })
+            results.addAll(goals.map { SearchResult.GoalResult(it.toDomainModel()) })
+            
+            results
+        }
+    }
+
+    override fun getRecentSearches(): Flow<List<String>> {
+        return recentSearchDao.getRecentSearches().map { entities ->
+            entities.map { it.query }
+        }
+    }
+
+    override suspend fun saveSearch(query: String) {
+        if (query.isNotBlank()) {
+            recentSearchDao.insertSearch(RecentSearchEntity(query))
+        }
+    }
+
+    override suspend fun deleteSearch(query: String) {
+        recentSearchDao.deleteSearch(query)
+    }
+
+    override suspend fun clearRecentSearches() {
+        recentSearchDao.clearAll()
+    }
+}

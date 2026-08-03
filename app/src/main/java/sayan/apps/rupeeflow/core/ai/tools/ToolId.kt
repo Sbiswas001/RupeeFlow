@@ -1,0 +1,12 @@
+package sayan.apps.rupeeflow.core.ai.tools
+
+enum class ToolId {
+    GET_MONTHLY_SUMMARY,
+    GET_CATEGORY_EXPENSE,
+    GET_TOP_MERCHANTS,
+    GET_BUDGET_STATUS,
+    DETECT_RECURRING_PAYMENTS,
+    DETECT_ANOMALIES,
+    SEARCH_TRANSACTIONS,
+    UNKNOWN
+}
