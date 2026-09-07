@@ -4,6 +4,27 @@ RupeeFlow is a modern, feature-rich personal finance tracker built natively for 
 
 ---
 
+🚧 **Project Status: Active Development**  
+*Features and capabilities are actively evolving to provide an even more seamless personal finance experience.*
+
+---
+
+## ✨ Highlights
+
+RupeeFlow is designed around a unified view of personal finances rather than simply recording expenses. Bank accounts act as the source of truth for balances and linked payment instruments, while dashboards, budgets, recurring transactions, financial health metrics, and widgets provide actionable insight into day-to-day finances.
+
+---
+
+## 📱 Screenshots / UI Previews
+
+<p align="center">
+  <img src="screenshots/dashboard.png" width="300" alt="Dashboard Screen" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/insights.png" width="300" alt="Insights Screen" />
+</p>
+
+---
+
 ## 🌟 Key Features
 
 ### 📊 Dashboard & Overview
@@ -30,7 +51,14 @@ RupeeFlow is a modern, feature-rich personal finance tracker built natively for 
 ### 📈 Analytics & Reports
 - Comprehensive spending breakdown by category and merchant.
 - Visual data representations using custom Bar Charts and Line Charts.
-- Financial health scoring and forecasting.
+
+### 🧠 Financial Health Scoring
+- Four-pillar financial health scoring model (0–100) designed to provide an explainable assessment of financial well-being:
+  1. **Spending Control (25%)**: Evaluates budget adherence and spending velocity.
+  2. **Cash Flow (25%)**: Measures income versus expenditure balance.
+  3. **Savings (30%)**: Tracks savings rate relative to total income.
+  4. **Commitment Load (20%)**: Assesses recurring bills and fixed commitments.
+- Provides actionable insights and advice pills rather than relying on a single raw spending metric.
 
 ### 🔒 Security & Privacy
 - **App Lock**: Biometric and passcode protection to secure your financial data.
@@ -47,26 +75,34 @@ RupeeFlow is a modern, feature-rich personal finance tracker built natively for 
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🏛️ Core Architecture
+
+RupeeFlow follows Clean Architecture principles with a reactive Unidirectional Data Flow (UDF):
+
+```
+UI (Jetpack Compose / Glance Widgets)
+        ↓
+ViewModels (StateFlow / UDF)
+        ↓
+Use Cases / Domain Logic (Financial Calculators & Engines)
+        ↓
+Repositories (Hilt DI & Data Sources)
+        ↓
+Room Database / DataStore Preferences
+```
+
+---
+
+## 🛠️ Tech Stack
 
 - **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) with [Material 3](https://m3.material.io/) design system.
-- **Architecture**: MVVM (Model-View-ViewModel) with unidirectional data flow and Clean Architecture principles.
+- **Architecture**: MVVM (Model-View-ViewModel) with Unidirectional Data Flow & Clean Architecture.
 - **Dependency Injection**: [Dagger Hilt](https://dagger.dev/hilt/).
 - **Local Persistence**: [Room Database](https://developer.android.com/training/data-storage/room) with robust migrations and schema testing.
 - **Asynchronous Processing**: [Kotlin Coroutines](https://kotlinlang.org/docs/coroutines-overview.html) & [Flow](https://kotlinlang.org/docs/flow.html).
 - **Background Tasks**: [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) for automated recurring transactions and cloud sync.
 - **Widgets**: [Jetpack Glance](https://developer.android.com/jetpack/androidx/releases/glance) for modern Compose-based App Widgets.
 - **Navigation**: Jetpack Navigation 3 & Hilt Navigation Compose.
-
----
-
-## 📱 Screenshots / UI Previews
-
-<p align="center">
-  <img src="screenshots/dashboard.png" width="300" alt="Dashboard Screen" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/insights.png" width="300" alt="Insights Screen" />
-</p>
 
 ---
 
