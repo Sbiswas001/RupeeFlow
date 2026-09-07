@@ -62,7 +62,11 @@ RupeeFlow is a modern, feature-rich personal finance tracker built natively for 
 
 ## 📱 Screenshots / UI Previews
 
-*(Add app screenshots or GIFs here)*
+<p align="center">
+  <img src="screenshots/dashboard.png" width="300" alt="Dashboard Screen" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="screenshots/insights.png" width="300" alt="Insights Screen" />
+</p>
 
 ---
 
