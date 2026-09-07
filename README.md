@@ -18,9 +18,11 @@ RupeeFlow is designed around a unified view of personal finances rather than sim
 ## 📱 Screenshots / UI Previews
 
 <p align="center">
-  <img src="screenshots/dashboard.png" width="300" alt="Dashboard Screen" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="screenshots/insights.png" width="300" alt="Insights Screen" />
+  <img width="260" alt="Dashboard Screen" src="https://github.com/user-attachments/assets/3b8553ac-9bcb-44ad-9934-22b0513dcd89" />
+  &nbsp;&nbsp;
+  <img width="260" alt="Insights Screen" src="https://github.com/user-attachments/assets/7b28b16c-304f-405e-9dab-3e64c2d5fa00" />
+  &nbsp;&nbsp;
+  <img width="260" alt="Analytics Screen" src="https://github.com/user-attachments/assets/d7310e4b-a8cc-4da3-a9e0-f3f2a2db7e72" />
 </p>
 
 ---
