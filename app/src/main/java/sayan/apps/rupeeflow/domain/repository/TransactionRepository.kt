@@ -7,7 +7,8 @@ import sayan.apps.rupeeflow.domain.model.Transaction
 data class CategorySpending(
     val categoryName: String,
     val colorHex: String,
-    val amount: Double
+    val amount: Double,
+    val categoryId: Long? = null
 )
 
 data class TrendPoint(
@@ -18,21 +19,26 @@ data class TrendPoint(
 interface TransactionRepository {
     fun getTransactions(): Flow<List<Transaction>>
     suspend fun getTransactionById(id: Long): Transaction?
-    suspend fun addTransaction(transaction: Transaction, accountId: Long, categoryId: Long?): Long
-    suspend fun updateTransaction(transaction: Transaction, accountId: Long, categoryId: Long?)
+    suspend fun addTransaction(transaction: Transaction, accountId: Long?, categoryId: Long?): Long
+    suspend fun updateTransaction(transaction: Transaction, accountId: Long?, categoryId: Long?)
     suspend fun deleteTransaction(transaction: Transaction)
+    suspend fun deleteTransfer(transferId: String)
     
     fun getCategorySpending(start: Long? = null, end: Long? = null): Flow<List<CategorySpending>>
     fun getSpendingTrend(start: Long? = null, end: Long? = null): Flow<List<TrendPoint>>
 
     fun getAttachments(transactionId: Long): Flow<List<Attachment>>
     suspend fun addAttachment(attachment: Attachment)
+    suspend fun deleteAttachmentsForTransaction(transactionId: Long)
 
     fun getTransactionCountForCategory(categoryId: Long): Flow<Int>
     fun getTotalAmountForCategory(categoryId: Long): Flow<Double?>
     fun getTransactionsForCategory(categoryId: Long): Flow<List<Transaction>>
 
     suspend fun getMonthlySpending(start: Long, end: Long): Double?
-    fun getTopMerchants(start: Long, end: Long, limit: Int): Flow<List<CategorySpending>>
+    suspend fun getTotalIncomeInRange(start: Long, end: Long): Double?
+    suspend fun getCategorySpendingInRange(categoryId: Long, start: Long, end: Long): Double?
+    suspend fun getBiggestExpenseInRange(start: Long, end: Long): Transaction?
+    suspend fun getTransactionCountInRange(start: Long, end: Long): Int
     suspend fun getTransactionsInRangeSync(start: Long, end: Long): List<Transaction>
 }

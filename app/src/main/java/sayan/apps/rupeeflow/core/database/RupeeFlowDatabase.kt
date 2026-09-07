@@ -13,16 +13,17 @@ import sayan.apps.rupeeflow.core.database.entity.*
         AccountEntity::class,
         BudgetEntity::class,
         CategoryEntity::class,
-        MerchantEntity::class,
         RecurringEntity::class,
+        RecurringOccurrenceEntity::class,
         GoalEntity::class,
+        GoalContributionEntity::class,
         AttachmentEntity::class,
         RecentSearchEntity::class,
-        ChatSessionEntity::class,
-        ChatMessageEntity::class
+        DebitCardEntity::class,
+        AccountUpiAppEntity::class
     ],
-    version = 11,
-    exportSchema = false
+    version = 25,
+    exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)
 abstract class RupeeFlowDatabase : RoomDatabase() {
@@ -32,5 +33,6 @@ abstract class RupeeFlowDatabase : RoomDatabase() {
     abstract fun planningDao(): PlanningDao
     abstract fun utilityDao(): UtilityDao
     abstract fun recentSearchDao(): RecentSearchDao
-    abstract fun aiDao(): AiDao
+    abstract fun debitCardDao(): DebitCardDao
+    abstract fun accountUpiAppDao(): AccountUpiAppDao
 }

@@ -11,8 +11,8 @@ fun CategoryEntity.toDomainModel(): Category {
         colorHex = colorHex,
         type = type,
         budget = budget,
-        isArchived = isArchived,
-        parentCategoryId = parentCategoryId
+        parentCategoryId = parentCategoryId,
+        isDeleted = isDeleted
     )
 }
 
@@ -24,7 +24,7 @@ fun Category.toEntity(): CategoryEntity {
         colorHex = colorHex,
         type = type,
         budget = budget,
-        isArchived = isArchived,
-        parentCategoryId = parentCategoryId
+        parentCategoryId = parentCategoryId,
+        isDeleted = isDeleted
     )
 }

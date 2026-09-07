@@ -45,7 +45,7 @@ interface TransactionDao {
     fun getTotalExpense(): Flow<Double?>
 
     @Query("""
-        SELECT c.name as categoryName, c.colorHex as colorHex, SUM(t.amount) as totalAmount
+        SELECT t.categoryId as categoryId, c.name as categoryName, c.colorHex as colorHex, SUM(t.amount) as totalAmount
         FROM transactions t
         LEFT JOIN categories c ON t.categoryId = c.id
         WHERE t.type = 'EXPENSE' AND t.timestamp BETWEEN :start AND :end
@@ -54,10 +54,9 @@ interface TransactionDao {
     fun getCategoryTotalsInRange(start: Long, end: Long): Flow<List<CategoryTotal>>
 
     @Query("""
-        SELECT (timestamp / 86400000) * 86400000 as timestamp, SUM(amount) as totalAmount
+        SELECT timestamp as timestamp, amount as totalAmount
         FROM transactions
         WHERE type = 'EXPENSE' AND timestamp BETWEEN :start AND :end
-        GROUP BY timestamp / 86400000
         ORDER BY timestamp ASC
     """)
     fun getDailySpendingTrendInRange(start: Long, end: Long): Flow<List<DailyTrend>>
@@ -68,25 +67,50 @@ interface TransactionDao {
     @Query("SELECT SUM(amount) FROM transactions WHERE categoryId = :categoryId")
     fun getTotalAmountForCategory(categoryId: Long): Flow<Double?>
 
+    @Query("""
+        SELECT SUM(amount) FROM transactions 
+        WHERE categoryId = :categoryId 
+          AND type = 'EXPENSE' 
+          AND (transferId IS NULL OR transferId = '')
+          AND timestamp BETWEEN :start AND :end
+    """)
+    fun getCategorySpendingInRangeFlow(categoryId: Long, start: Long, end: Long): Flow<Double?>
+
     @Query("SELECT * FROM transactions WHERE categoryId = :categoryId ORDER BY timestamp DESC")
     fun getTransactionsForCategory(categoryId: Long): Flow<List<TransactionEntity>>
 
-    @Query("SELECT SUM(amount) FROM transactions WHERE type = 'EXPENSE' AND timestamp BETWEEN :start AND :end")
+    @Query("SELECT SUM(amount) FROM transactions WHERE type = 'EXPENSE' AND (transferId IS NULL OR transferId = '') AND timestamp BETWEEN :start AND :end")
     suspend fun getMonthlySpending(start: Long, end: Long): Double?
 
+    @Query("SELECT SUM(amount) FROM transactions WHERE type = 'INCOME' AND (transferId IS NULL OR transferId = '') AND timestamp BETWEEN :start AND :end")
+    suspend fun getTotalIncomeInRange(start: Long, end: Long): Double?
+
     @Query("""
-        SELECT m.name as categoryName, m.logoUrl as colorHex, SUM(t.amount) as totalAmount
-        FROM transactions t
-        INNER JOIN merchants m ON t.merchantId = m.id
-        WHERE t.type = 'EXPENSE' AND t.timestamp BETWEEN :start AND :end
-        GROUP BY t.merchantId
-        ORDER BY totalAmount DESC
-        LIMIT :limit
+        SELECT SUM(amount) FROM transactions 
+        WHERE type = 'EXPENSE' 
+          AND categoryId = :categoryId 
+          AND (transferId IS NULL OR transferId = '')
+          AND timestamp BETWEEN :start AND :end
     """)
-    fun getTopMerchants(start: Long, end: Long, limit: Int): Flow<List<CategoryTotal>>
+    suspend fun getCategorySpendingInRange(categoryId: Long, start: Long, end: Long): Double?
+
+    @Query("SELECT * FROM transactions WHERE type = 'EXPENSE' AND timestamp BETWEEN :start AND :end ORDER BY amount DESC LIMIT 1")
+    suspend fun getBiggestExpenseInRange(start: Long, end: Long): TransactionEntity?
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE timestamp BETWEEN :start AND :end")
+    suspend fun getTransactionCountInRange(start: Long, end: Long): Int
 
     @Query("SELECT * FROM transactions WHERE timestamp BETWEEN :start AND :end ORDER BY timestamp ASC")
     fun getTransactionsInRangeSync(start: Long, end: Long): List<TransactionEntity>
+
+    @Query("DELETE FROM transactions")
+    suspend fun clearAllTransactions()
+
+    @Query("SELECT * FROM transactions WHERE accountId = :accountId AND type = 'BALANCE_ADJUSTMENT' AND id != :excludeId ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getLastReconciliationForAccount(accountId: Long, excludeId: Long): TransactionEntity?
+
+    @Query("SELECT * FROM transactions WHERE transferId = :transferId")
+    suspend fun getTransactionsByTransferId(transferId: String): List<TransactionEntity>
 
     @Transaction
     @Query("""

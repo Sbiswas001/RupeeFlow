@@ -1,0 +1,4 @@
+- [x] Remove "Clear Cache" and "Optimize Database" from `SettingsScreen.kt`
+- [x] Remove "Advanced" section (OCR Settings) from `SettingsScreen.kt`
+- [x] Make "Database Size" and "Cache Size" informational only (non-clickable)
+- [ ] Verify `SettingsScreen` layout and functionality

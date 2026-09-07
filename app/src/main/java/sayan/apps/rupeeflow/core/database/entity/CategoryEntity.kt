@@ -13,6 +13,6 @@ data class CategoryEntity(
     val colorHex: String,
     val type: TransactionType = TransactionType.EXPENSE,
     val budget: Double? = null,
-    val isArchived: Boolean = false,
-    val parentCategoryId: Long? = null
+    val parentCategoryId: Long? = null,
+    val isDeleted: Boolean = false
 )

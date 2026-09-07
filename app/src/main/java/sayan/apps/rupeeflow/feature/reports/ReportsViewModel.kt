@@ -3,42 +3,51 @@ package sayan.apps.rupeeflow.feature.reports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
+import sayan.apps.rupeeflow.core.financial.FinancialCalculations
+import sayan.apps.rupeeflow.core.financial.FinancialHealthCalculator
+import sayan.apps.rupeeflow.core.financial.FinancialHealthResult
+import sayan.apps.rupeeflow.domain.model.Account
+import sayan.apps.rupeeflow.domain.model.BudgetWithProgress
+import sayan.apps.rupeeflow.domain.model.Transaction
+import sayan.apps.rupeeflow.domain.model.TransactionType
 import sayan.apps.rupeeflow.domain.repository.AccountRepository
 import sayan.apps.rupeeflow.domain.repository.CategorySpending
 import sayan.apps.rupeeflow.domain.repository.PlanningRepository
 import sayan.apps.rupeeflow.domain.repository.RecurringRepository
 import sayan.apps.rupeeflow.domain.repository.TransactionRepository
-import sayan.apps.rupeeflow.domain.model.Transaction
+import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
+import kotlin.math.abs
 
 enum class ReportType {
-    OVERVIEW, SPENDING, INCOME, BUDGET, ACCOUNTS, MERCHANTS, CATEGORIES
+    OVERVIEW, SPENDING, INCOME, BUDGET, ACCOUNTS, CATEGORIES
 }
 
 data class ReportSummary(
     val income: Double = 0.0,
     val expense: Double = 0.0,
-    val savings: Double = 0.0,
-    val netCashFlow: Double = 0.0
+    val netCashFlow: Double = 0.0,
+    val transactionCount: Int = 0
 )
 
 data class MonthlyComparison(
-    val incomeChange: Double = 0.0,
+    val incomeChange: Double? = null,
     val prevIncome: Double = 0.0,
     val currentIncome: Double = 0.0,
-    val expenseChange: Double = 0.0,
+    val expenseChange: Double? = null,
     val prevExpense: Double = 0.0,
     val currentExpense: Double = 0.0,
-    val savingsChange: Double = 0.0,
-    val prevSavings: Double = 0.0,
-    val currentSavings: Double = 0.0
+    val netCashFlowChange: Double? = null,
+    val prevNetCashFlow: Double = 0.0,
+    val currentNetCashFlow: Double = 0.0
 )
 
-data class MerchantSpending(
-    val merchantName: String,
+data class SpendingEntityBreakdown(
+    val title: String,
     val amount: Double,
     val transactionCount: Int
 )
@@ -59,16 +68,20 @@ data class ReportHighlights(
 data class ReportsState(
     val selectedReportType: ReportType = ReportType.OVERVIEW,
     val selectedMonth: Calendar = Calendar.getInstance(),
+    val formattedMonthLabel: String = "",
     val summary: ReportSummary = ReportSummary(),
     val comparison: MonthlyComparison = MonthlyComparison(),
     val categorySpending: List<CategorySpending> = emptyList(),
-    val merchantSpending: List<MerchantSpending> = emptyList(),
+    val incomeSpending: List<CategorySpending> = emptyList(),
+    val spendingBreakdown: List<SpendingEntityBreakdown> = emptyList(),
     val dailySpending: List<DaySpending> = emptyList(),
     val highlights: ReportHighlights = ReportHighlights(),
     val monthlyStory: List<String> = emptyList(),
     val timeline: List<Transaction> = emptyList(),
-    val financialScore: Int = 0,
-    val scoreReasons: List<String> = emptyList(),
+    val healthResult: FinancialHealthResult = FinancialHealthResult(null, "Not enough data yet", emptyList(), false, emptyList()),
+    val budgets: List<BudgetWithProgress> = emptyList(),
+    val accounts: List<Account> = emptyList(),
+    val exportSummaryText: String = "",
     val isLoading: Boolean = true
 )
 
@@ -95,47 +108,56 @@ class ReportsViewModel @Inject constructor(
 
         combine(
             transactionRepository.getTransactions(),
-            planningRepository.getBudgetsWithProgress(),
-            transactionRepository.getCategorySpending(range.first, range.second)
-        ) { transactions, budgets, categorySpending ->
-            val currentTrans = transactions.filter { it.timestamp in range.first..range.second }
-            val prevTrans = transactions.filter { it.timestamp in prevRange.first..prevRange.second }
+            planningRepository.getBudgetsWithProgress(range.first, range.second),
+            transactionRepository.getCategorySpending(range.first, range.second),
+            accountRepository.getAccounts(),
+            recurringRepository.getRecurringItems()
+        ) { transactions, budgets, categorySpending, accounts, recurring ->
+            val nonTransferTxs = FinancialCalculations.filterNonTransferTransactions(transactions)
 
-            val expenses = currentTrans.filter { !it.isIncome }
-            val income = currentTrans.filter { it.isIncome }.sumOf { it.amount }
-            val expense = expenses.sumOf { it.amount }
-            val savings = income - expense
+            val currentTrans = nonTransferTxs.filter { it.timestamp in range.first..range.second }
+            val prevTrans = nonTransferTxs.filter { it.timestamp in prevRange.first..prevRange.second }
 
-            val prevIncome = prevTrans.filter { it.isIncome }.sumOf { it.amount }
-            val prevExpense = prevTrans.filter { !it.isIncome }.sumOf { it.amount }
-            val prevSavings = prevIncome - prevExpense
+            val currentNet = FinancialCalculations.calculateNetCashFlow(currentTrans)
+            val prevNet = FinancialCalculations.calculateNetCashFlow(prevTrans)
+
+            val incomeTrans = currentTrans.filter { it.isIncome || it.type == TransactionType.INCOME }
+            val incomeSpending = incomeTrans.groupBy { it.category }.map { (name, list) ->
+                CategorySpending(
+                    categoryName = name,
+                    colorHex = "#10B981",
+                    amount = list.sumOf { it.amount }
+                )
+            }.sortedByDescending { it.amount }
+
+            val expenses = currentTrans.filter { !it.isIncome && it.type == TransactionType.EXPENSE }
 
             val comparison = MonthlyComparison(
-                incomeChange = calculatePercentChange(prevIncome, income),
-                prevIncome = prevIncome,
-                currentIncome = income,
-                expenseChange = calculatePercentChange(prevExpense, expense),
-                prevExpense = prevExpense,
-                currentExpense = expense,
-                savingsChange = calculatePercentChange(prevSavings, savings),
-                prevSavings = prevSavings,
-                currentSavings = savings
+                incomeChange = FinancialCalculations.calculatePercentChange(prevNet.income, currentNet.income),
+                prevIncome = prevNet.income,
+                currentIncome = currentNet.income,
+                expenseChange = FinancialCalculations.calculatePercentChange(prevNet.spending, currentNet.spending),
+                prevExpense = prevNet.spending,
+                currentExpense = currentNet.spending,
+                netCashFlowChange = FinancialCalculations.calculatePercentChange(prevNet.netCashFlow, currentNet.netCashFlow),
+                prevNetCashFlow = prevNet.netCashFlow,
+                currentNetCashFlow = currentNet.netCashFlow
             )
 
             val highestExpense = expenses.maxByOrNull { it.amount }
-            val highestIncome = currentTrans.filter { it.isIncome }.maxByOrNull { it.amount }
+            val highestIncome = incomeTrans.maxByOrNull { it.amount }
             val mostUsedCategory = expenses.groupBy { it.category }.maxByOrNull { it.value.size }?.key ?: "N/A"
-            
-            val merchants = expenses.groupBy { it.title }
-            val merchantSpending = merchants.map { (name, trans) ->
-                MerchantSpending(
-                    merchantName = name,
+
+            val titles = expenses.groupBy { it.title }
+            val spendingBreakdown = titles.map { (name, trans) ->
+                SpendingEntityBreakdown(
+                    title = name,
                     amount = trans.sumOf { it.amount },
                     transactionCount = trans.size
                 )
             }.sortedByDescending { it.amount }
 
-            val dailySpending = expenses.groupBy { 
+            val dailySpending = expenses.groupBy {
                 val cal = Calendar.getInstance()
                 cal.timeInMillis = it.timestamp
                 cal.get(Calendar.DAY_OF_MONTH)
@@ -143,70 +165,86 @@ class ReportsViewModel @Inject constructor(
                 DaySpending(day, trans.sumOf { it.amount }, trans.sortedByDescending { it.amount }.take(3))
             }
 
-            // Calculate Financial Score & Reasons
-            val scoreReasons = mutableListOf<String>()
-            val budgetAdherence = if (budgets.isNotEmpty()) budgets.count { it.progress <= 1.0f }.toDouble() / budgets.size else 1.0
-            if (budgetAdherence >= 0.8) scoreReasons.add("Excellent budget adherence.")
-            else if (budgetAdherence < 0.5) scoreReasons.add("Budget exceeded in multiple categories.")
-            
-            val savingsRate = if (income > 0) (savings / income).coerceIn(0.0, 1.0) else 0.0
-            if (savingsRate >= 0.2) scoreReasons.add("Savings rate is healthy.")
-            else if (income > 0) scoreReasons.add("Try to save at least 20% of your income.")
+            val recurringTotal = recurring.filter { it.status == "PENDING" }.sumOf { it.amount }
+            val healthResult = FinancialHealthCalculator.calculateFinancialHealth(
+                income = currentNet.income,
+                expense = currentNet.spending,
+                budgets = budgets,
+                recurringTotal = recurringTotal,
+                transactionCount = currentTrans.size,
+                allTransactions = nonTransferTxs
+            )
 
-            val expenseTrend = if (comparison.expenseChange <= 0) 1.0 else (1.0 - (comparison.expenseChange / 100.0)).coerceIn(0.0, 1.0)
-            if (comparison.expenseChange < 0) scoreReasons.add("Spending decreased compared to last month.")
+            val monthName = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(month.time)
 
-            val score = (budgetAdherence * 40 + savingsRate * 30 + expenseTrend * 30).toInt()
-
-            // Monthly Story
+            // Data-driven Natural Monthly Review Story
             val story = mutableListOf<String>()
-            story.add("You earned ${formatCurrencySimple(income)}.")
-            story.add("You spent only ${formatCurrencySimple(expense)}.")
-            if (income > 0) {
-                val rate = (savings / income * 100)
-                story.add("You saved ${String.format(Locale.getDefault(), "%.2f", rate)}% of your income.")
+            story.add("$monthName in review: You earned ₹${formatAmountSimple(currentNet.income)} and spent ₹${formatAmountSimple(currentNet.spending)}.")
+            if (currentNet.netCashFlow < 0) {
+                story.add("Your net cash flow was -₹${formatAmountSimple(abs(currentNet.netCashFlow))}.")
+            } else if (currentNet.netCashFlow > 0) {
+                story.add("Your net cash flow was +₹${formatAmountSimple(currentNet.netCashFlow)}.")
             }
-            if (expenses.isNotEmpty()) {
+
+            if (expenses.isNotEmpty() && currentNet.spending > 0) {
                 val topCat = expenses.groupBy { it.category }.maxByOrNull { it.value.sumOf { t -> t.amount } }
-                val catPercent = (topCat?.value?.sumOf { it.amount } ?: 0.0) / expense * 100
-                story.add("${topCat?.key} accounted for ${catPercent.toInt()}% of your expenses.")
+                if (topCat != null) {
+                    val catPercent = ((topCat.value.sumOf { it.amount } / currentNet.spending) * 100).toInt()
+                    story.add("${topCat.key} accounted for $catPercent% of your expenses.")
+                }
             }
+
             if (highestExpense != null) {
-                story.add("Your largest purchase was ${highestExpense.title} (${formatCurrencySimple(highestExpense.amount)}).")
+                story.add("Your largest expense was ${highestExpense.title} at ₹${formatAmountSimple(highestExpense.amount)}.")
             }
-            if (comparison.savingsChange > 0) {
-                story.add("Compared to last month, your savings increased by ${comparison.savingsChange.toInt()}%.")
+
+            val exportText = buildString {
+                appendLine("RupeeFlow Report - $monthName")
+                appendLine("==========================================")
+                appendLine("Total Income: ₹${formatAmountSimple(currentNet.income)}")
+                appendLine("Total Expense: ₹${formatAmountSimple(currentNet.spending)}")
+                appendLine("Net Cash Flow: ₹${formatAmountSimple(currentNet.netCashFlow)}")
+                appendLine("Transactions: ${currentTrans.size}")
+                if (highestExpense != null) {
+                    appendLine("Largest Expense: ${highestExpense.title} (₹${formatAmountSimple(highestExpense.amount)})")
+                }
+                appendLine("==========================================")
             }
 
             ReportsState(
                 selectedReportType = type,
                 selectedMonth = month,
-                summary = ReportSummary(income, expense, savings, savings),
+                formattedMonthLabel = monthName,
+                summary = ReportSummary(currentNet.income, currentNet.spending, currentNet.netCashFlow, currentTrans.size),
                 comparison = comparison,
                 categorySpending = categorySpending.sortedByDescending { it.amount },
-                merchantSpending = merchantSpending,
+                incomeSpending = incomeSpending,
+                spendingBreakdown = spendingBreakdown,
                 dailySpending = dailySpending,
                 highlights = ReportHighlights(
                     largestExpense = highestExpense,
                     highestIncome = highestIncome,
                     mostUsedCategory = mostUsedCategory,
-                    mostUsedAccount = "Primary" // Placeholder
+                    mostUsedAccount = accounts.maxByOrNull { it.balance }?.name ?: "N/A"
                 ),
                 monthlyStory = story,
-                timeline = currentTrans.sortedByDescending { it.timestamp }.take(10),
-                financialScore = score,
-                scoreReasons = scoreReasons,
+                timeline = currentTrans.sortedByDescending { it.timestamp },
+                healthResult = healthResult,
+                budgets = budgets,
+                accounts = accounts,
+                exportSummaryText = exportText,
                 isLoading = false
             )
-        }
-    }.stateIn(
+        }.flowOn(Dispatchers.Default)
+    }.flowOn(Dispatchers.Default)
+    .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReportsState()
     )
 
-    private fun formatCurrencySimple(amount: Double): String {
-        return "₹${String.format(Locale.getDefault(), "%,.0f", amount)}"
+    private fun formatAmountSimple(amount: Double): String {
+        return String.format(Locale.US, "%,.2f", amount)
     }
 
     private fun getMonthRange(calendar: Calendar): Pair<Long, Long> {
@@ -233,16 +271,23 @@ class ReportsViewModel @Inject constructor(
         return getMonthRange(prev)
     }
 
-    private fun calculatePercentChange(old: Double, new: Double): Double {
-        if (old == 0.0) return if (new > 0.0) 100.0 else 0.0
-        return ((new - old) / old) * 100.0
-    }
-
     fun onReportTypeSelected(type: ReportType) {
         _selectedReportType.value = type
     }
 
     fun onMonthSelected(month: Calendar) {
         _selectedMonth.value = month
+    }
+
+    fun onPreviousMonth() {
+        val prev = _selectedMonth.value.clone() as Calendar
+        prev.add(Calendar.MONTH, -1)
+        _selectedMonth.value = prev
+    }
+
+    fun onNextMonth() {
+        val next = _selectedMonth.value.clone() as Calendar
+        next.add(Calendar.MONTH, 1)
+        _selectedMonth.value = next
     }
 }

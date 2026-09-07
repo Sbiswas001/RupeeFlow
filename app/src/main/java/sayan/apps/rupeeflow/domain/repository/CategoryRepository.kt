@@ -5,12 +5,10 @@ import sayan.apps.rupeeflow.domain.model.Category
 
 interface CategoryRepository {
     fun getCategories(): Flow<List<Category>>
-    fun getActiveCategories(): Flow<List<Category>>
-    fun getArchivedCategories(): Flow<List<Category>>
     suspend fun getCategoryById(id: Long): Category?
-    suspend fun addCategory(category: Category)
+    suspend fun addCategory(category: Category): Long
     suspend fun updateCategory(category: Category)
-    suspend fun deleteCategory(category: Category)
-    suspend fun setArchived(id: Long, isArchived: Boolean)
+    suspend fun deleteCategory(category: Category, targetCategoryId: Long? = null)
+    suspend fun isCategoryInUse(categoryId: Long): Boolean
     fun searchCategories(query: String): Flow<List<Category>>
 }

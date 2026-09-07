@@ -29,6 +29,21 @@ fun AboutScreen(
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text("About") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Black,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        },
         containerColor = Color.Transparent
     ) { innerPadding ->
         Column(

@@ -16,19 +16,17 @@ data class CategoryUiState(
     val categories: List<Category> = emptyList(),
     val searchQuery: String = "",
     val filterType: CategoryFilter = CategoryFilter.ALL,
-    val showArchived: Boolean = false,
     val isLoading: Boolean = false
 )
 
 data class CategoryStats(
     val expenseCount: Int = 0,
     val incomeCount: Int = 0,
-    val totalCount: Int = 0,
-    val archivedCount: Int = 0
+    val totalCount: Int = 0
 )
 
 enum class CategoryFilter {
-    ALL, EXPENSE, INCOME, BUDGETED, UNUSED, ARCHIVED
+    ALL, EXPENSE, INCOME, BUDGETED, UNUSED
 }
 
 @HiltViewModel
@@ -43,39 +41,33 @@ class CategoriesViewModel @Inject constructor(
     private val _filterType = MutableStateFlow(CategoryFilter.ALL)
     val filterType = _filterType.asStateFlow()
 
-    private val _showArchived = MutableStateFlow(false)
-
     val uiState: StateFlow<CategoryUiState> = combine(
         categoryRepository.getCategories(),
         _searchQuery,
-        _filterType,
-        _showArchived
-    ) { categories, query, filter, showArchived ->
+        _filterType
+    ) { categories, query, filter ->
         val filtered = categories.filter { category ->
             val matchesQuery = category.name.contains(query, ignoreCase = true)
             val matchesFilter = when (filter) {
-                CategoryFilter.ALL -> !category.isArchived || showArchived
-                CategoryFilter.EXPENSE -> category.type == TransactionType.EXPENSE && (!category.isArchived || showArchived)
-                CategoryFilter.INCOME -> category.type == TransactionType.INCOME && (!category.isArchived || showArchived)
-                CategoryFilter.ARCHIVED -> category.isArchived
-                else -> !category.isArchived
+                CategoryFilter.ALL -> true
+                CategoryFilter.EXPENSE -> category.type == TransactionType.EXPENSE
+                CategoryFilter.INCOME -> category.type == TransactionType.INCOME
+                else -> true
             }
             matchesQuery && matchesFilter
         }
         CategoryUiState(
             categories = filtered,
             searchQuery = query,
-            filterType = filter,
-            showArchived = showArchived
+            filterType = filter
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryUiState())
 
     val stats: StateFlow<CategoryStats> = categoryRepository.getCategories().map { categories ->
         CategoryStats(
-            expenseCount = categories.count { it.type == TransactionType.EXPENSE && !it.isArchived },
-            incomeCount = categories.count { it.type == TransactionType.INCOME && !it.isArchived },
-            totalCount = categories.count { !it.isArchived },
-            archivedCount = categories.count { it.isArchived }
+            expenseCount = categories.count { it.type == TransactionType.EXPENSE },
+            incomeCount = categories.count { it.type == TransactionType.INCOME },
+            totalCount = categories.size
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CategoryStats())
 
@@ -85,24 +77,15 @@ class CategoriesViewModel @Inject constructor(
 
     fun onFilterChange(filter: CategoryFilter) {
         _filterType.value = filter
-        if (filter == CategoryFilter.ARCHIVED) {
-            _showArchived.value = true
-        }
     }
 
-    fun toggleShowArchived() {
-        _showArchived.value = !_showArchived.value
+    suspend fun isCategoryInUse(categoryId: Long): Boolean {
+        return categoryRepository.isCategoryInUse(categoryId)
     }
 
-    fun archiveCategory(id: Long) {
+    fun deleteCategory(category: Category, targetCategoryId: Long? = null) {
         viewModelScope.launch {
-            categoryRepository.setArchived(id, true)
-        }
-    }
-
-    fun deleteCategory(category: Category) {
-        viewModelScope.launch {
-            categoryRepository.deleteCategory(category)
+            categoryRepository.deleteCategory(category, targetCategoryId)
         }
     }
 

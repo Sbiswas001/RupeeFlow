@@ -1,5 +1,8 @@
 package sayan.apps.rupeeflow.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Category(
     val id: Long = 0,
     val name: String,
@@ -7,6 +10,6 @@ data class Category(
     val colorHex: String,
     val type: TransactionType = TransactionType.EXPENSE,
     val budget: Double? = null,
-    val isArchived: Boolean = false,
-    val parentCategoryId: Long? = null
+    val parentCategoryId: Long? = null,
+    val isDeleted: Boolean = false
 )

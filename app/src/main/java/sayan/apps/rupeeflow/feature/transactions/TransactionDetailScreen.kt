@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Comment
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,12 +19,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import sayan.apps.rupeeflow.core.designsystem.theme.EmeraldGreen
 import sayan.apps.rupeeflow.core.designsystem.theme.VibrantRed
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
 import sayan.apps.rupeeflow.domain.model.Transaction
+import sayan.apps.rupeeflow.domain.model.TransactionType
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,13 +39,42 @@ fun TransactionDetailScreen(
 ) {
     val preferences = LocalUserPreferences.current
     val transactions by viewModel.transactions.collectAsState()
-    val transaction = transactions.find { it.id.toLong() == transactionId }
+    val accounts by viewModel.accounts.collectAsState()
+    val transaction = transactions.values.flatten().find { it.id == transactionId.toString() }
     val attachments by viewModel.getAttachments(transactionId).collectAsState(initial = emptyList())
 
     val dateFormat = SimpleDateFormat("dd MMMM, yyyy", Locale.getDefault())
     val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+    var showEditTransferDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Details") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        if (transaction?.type == TransactionType.TRANSFER) {
+                            showEditTransferDialog = true
+                        } else {
+                            onNavigateToEdit(transactionId)
+                        }
+                    }) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Black,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                )
+            )
+        },
         containerColor = Color.Transparent
     ) { innerPadding ->
         if (transaction == null) {
@@ -60,34 +91,67 @@ fun TransactionDetailScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
+                val isAdjustment = transaction.type == TransactionType.BALANCE_ADJUSTMENT
+                val isTransfer = transaction.type == TransactionType.TRANSFER
+
                 // Icon & Amount
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
                             .size(80.dp)
                             .background(
-                                color = if (transaction.isIncome) EmeraldGreen.copy(alpha = 0.1f) else VibrantRed.copy(alpha = 0.1f),
+                                color = when {
+                                    isAdjustment -> Color(0xFF7C3AED).copy(alpha = 0.1f)
+                                    isTransfer -> Color(0xFF7C3AED).copy(alpha = 0.05f)
+                                    transaction.isIncome -> EmeraldGreen.copy(alpha = 0.1f)
+                                    else -> VibrantRed.copy(alpha = 0.1f)
+                                },
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (transaction.isIncome) Icons.Rounded.ArrowUpward else Icons.Rounded.ArrowDownward,
+                            imageVector = when {
+                                isAdjustment -> Icons.Rounded.AccountBalance
+                                isTransfer -> Icons.Rounded.SwapHoriz
+                                transaction.isIncome -> Icons.Rounded.ArrowUpward
+                                else -> Icons.Rounded.ArrowDownward
+                            },
                             contentDescription = null,
-                            tint = if (transaction.isIncome) EmeraldGreen else VibrantRed,
+                            tint = when {
+                                isAdjustment || isTransfer -> Color(0xFF7C3AED)
+                                transaction.isIncome -> EmeraldGreen
+                                else -> VibrantRed
+                            },
                             modifier = Modifier.size(40.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "${if (transaction.isIncome) "+" else "-"} ${CurrencyFormatter.format(transaction.amount, preferences)}",
+                        text = if (isAdjustment) {
+                            (if (transaction.amount >= 0) "+" else "") + CurrencyFormatter.format(transaction.amount, preferences, overrideHideBalances = true)
+                        } else if (isTransfer) {
+                            CurrencyFormatter.format(transaction.amount, preferences, overrideHideBalances = true)
+                        } else {
+                            "${if (transaction.isIncome) "+" else "-"} ${CurrencyFormatter.format(transaction.amount, preferences, overrideHideBalances = true)}"
+                        },
                         style = MaterialTheme.typography.displayMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = if (transaction.isIncome) EmeraldGreen else VibrantRed
+                            color = when {
+                                isTransfer -> Color.White
+                                isAdjustment && transaction.amount >= 0 -> EmeraldGreen
+                                isAdjustment && transaction.amount < 0 -> VibrantRed
+                                transaction.isIncome -> EmeraldGreen
+                                else -> VibrantRed
+                            }
                         )
                     )
                     Text(
-                        text = transaction.title,
+                        text = when {
+                            isAdjustment -> "Balance Adjustment"
+                            isTransfer -> "Transfer"
+                            else -> transaction.title
+                        },
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                     )
                 }
@@ -101,11 +165,41 @@ fun TransactionDetailScreen(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        DetailItem(label = "Category", value = transaction.category, icon = Icons.Rounded.Category)
+                        val accountName = accounts.find { it.id == transaction.accountId }?.name 
+                            ?: transaction.accountNameSnapshot?.let { "$it (closed)" }
+                            ?: "Unknown Account"
+                        DetailItem(label = "Account", value = accountName, icon = Icons.Rounded.AccountBalanceWallet)
+
+                        if (isTransfer) {
+                            val otherAccountName = accounts.find { it.id == transaction.transferAccountId }?.name
+                                ?: transaction.transferAccountNameSnapshot?.let { "$it (closed)" }
+                                ?: "Unknown Account"
+                            DetailItem(
+                                label = if (transaction.isIncoming) "From Account" else "To Account",
+                                value = otherAccountName,
+                                icon = Icons.Rounded.SwapHoriz
+                            )
+                        }
+
+                        if (isAdjustment) {
+                            DetailItem(label = "Adjustment Type", value = "Account Correction", icon = Icons.Rounded.AccountBalance)
+                            transaction.reconciliationReason?.let {
+                                DetailItem(label = "Reason", value = it, icon = Icons.AutoMirrored.Rounded.Comment)
+                            }
+                            transaction.previousBalance?.let { 
+                                DetailItem(label = "Previous Balance", value = CurrencyFormatter.format(it, preferences, overrideHideBalances = true), icon = Icons.Rounded.History)
+                            }
+                            transaction.actualBalance?.let { 
+                                DetailItem(label = "Actual Balance", value = CurrencyFormatter.format(it, preferences, overrideHideBalances = true), icon = Icons.Rounded.AccountBalanceWallet)
+                            }
+                        } else if (!isTransfer) {
+                            DetailItem(label = "Category", value = transaction.category, icon = Icons.Rounded.Category)
+                        }
+                        
                         DetailItem(label = "Date", value = dateFormat.format(Date(transaction.timestamp)), icon = Icons.Rounded.Event)
                         DetailItem(label = "Time", value = timeFormat.format(Date(transaction.timestamp)), icon = Icons.Rounded.Schedule)
                         
-                        if (transaction.upiMetadata != null) {
+                        if (transaction.upiMetadata != null && !isAdjustment && !isTransfer) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                             DetailItem(
                                 label = "UPI App", 
@@ -185,10 +279,36 @@ fun TransactionDetailScreen(
                 ) {
                     Icon(Icons.Rounded.Delete, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Delete Transaction")
+                    Text(if (isTransfer) "Delete Transfer" else "Delete Transaction")
                 }
             }
         }
+    }
+
+    if (showEditTransferDialog && transaction != null) {
+        val fromId = if (transaction.isIncoming) transaction.transferAccountId ?: 0L else transaction.accountId ?: 0L
+        val toId = if (transaction.isIncoming) transaction.accountId ?: 0L else transaction.transferAccountId ?: 0L
+        sayan.apps.rupeeflow.feature.accounts.TransferDialog(
+            accounts = accounts,
+            title = "Edit Transfer",
+            initialFromAccountId = fromId,
+            initialToAccountId = toId,
+            initialAmount = transaction.amount.toString(),
+            initialNote = transaction.note ?: "",
+            initialTimestamp = transaction.timestamp,
+            onDismiss = { showEditTransferDialog = false },
+            onTransfer = { from, to, amount, note, timestamp ->
+                viewModel.updateTransfer(
+                    transferId = transaction.transferId ?: "",
+                    fromAccountId = from,
+                    toAccountId = to,
+                    amount = amount,
+                    note = note.ifBlank { null },
+                    timestamp = timestamp
+                )
+                showEditTransferDialog = false
+            }
+        )
     }
 }
 

@@ -1,0 +1,8 @@
+- [x] Update `Color.kt` with refined hierarchy and semantic colors
+- [x] Refactor `Theme.kt` with `RupeeFlowColors` CompositionLocal and dynamic logic
+- [x] Remove `AppTheme` from `UserPreferences.kt` and `UserPreferencesRepository`
+- [x] Update `UserPreferencesRepositoryImpl.kt` (keys, defaults, cleanup)
+- [x] Refactor `SettingsScreen.kt` (remove Theme row, update descriptions, clickability)
+- [x] Clean up `SettingsViewModel.kt` and all global `AppTheme` references
+- [x] Create and run `UserPreferencesRepositoryTest.kt`
+- [/] Verify all 4 AMOLED/Dynamic combinations manually (Code implementation is complete)

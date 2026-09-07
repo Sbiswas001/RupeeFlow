@@ -10,11 +10,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
 import sayan.apps.rupeeflow.domain.model.RecurringItem
+import sayan.apps.rupeeflow.domain.model.RecurringOccurrence
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -22,98 +25,170 @@ import java.util.*
 fun RecurringItemCard(
     item: RecurringItem,
     onClick: () -> Unit,
-    onPay: () -> Unit
+    onPay: (RecurringOccurrence) -> Unit
 ) {
     val preferences = LocalUserPreferences.current
     val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
     
+    val nextOccurrence = item.occurrences
+        .filter { it.status == "PENDING" }
+        .minByOrNull { it.scheduledDate }
+
+    val todayStart = getStartOfToday()
+    val dueText: String
+    val dueColor: Color
+    val dueIcon: @Composable (() -> Unit)?
+
+    if (nextOccurrence != null) {
+        val scheduled = nextOccurrence.scheduledDate
+        when {
+            isToday(scheduled) -> {
+                dueText = "Due today"
+                dueColor = Color(0xFFFFB74D)
+                dueIcon = {
+                    Icon(
+                        Icons.Rounded.Notifications,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB74D),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+            scheduled < todayStart -> {
+                val days = ((todayStart - scheduled) / (1000 * 60 * 60 * 24)).toInt()
+                dueText = if (days == 1) "Overdue by 1 day" else "Overdue by $days days"
+                dueColor = Color(0xFFF43F5E)
+                dueIcon = {
+                    Icon(
+                        Icons.Rounded.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFF43F5E),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+            else -> {
+                dueText = "Next due: ${dateFormat.format(Date(scheduled))}"
+                dueColor = Color(0xFF9CA3AF)
+                dueIcon = null
+            }
+        }
+    } else {
+        dueText = "All paid"
+        dueColor = Color(0xFF10B981)
+        dueIcon = {
+            Icon(
+                Icons.Rounded.Check,
+                contentDescription = null,
+                tint = Color(0xFF10B981),
+                modifier = Modifier.size(12.dp)
+            )
+        }
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(24.dp)
+        color = Color(0xFF181818),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Top row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    // Placeholder for Category Icon
                     Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(48.dp)
+                        color = Color(0xFF7C3AED).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = getIconForCategory(item.category),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = Color(0xFF7C3AED),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                     
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     
-                    Column {
-                        Text(
-                            text = item.title,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = if (item.status == "PAID") "Last Paid: ${dateFormat.format(Date(item.lastPaidDate ?: item.dueDate))}" 
-                                   else "Due: ${dateFormat.format(Date(item.dueDate))}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
                 }
                 
-                Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = CurrencyFormatter.format(item.amount, preferences),
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    ),
+                    color = Color.White
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Second row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    dueIcon?.invoke()
                     Text(
-                        text = CurrencyFormatter.format(item.amount, preferences),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
+                        text = dueText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = dueColor
                     )
-                    if (item.frequency != "NONE") {
-                        Text(
-                            text = "/ ${item.frequency.lowercase()}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                }
+                
+                if (item.frequency != "NONE") {
+                    val freqText = if (item.frequency == "CUSTOM") {
+                        "Every ${item.frequencyInterval} ${item.frequencyUnit.lowercase()}"
+                    } else {
+                        "Every ${item.frequency.lowercase()}"
                     }
+                    Text(
+                        text = freqText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = Color(0xFF9CA3AF)
+                    )
                 }
             }
             
             if (item.category == "EMIs" && item.recurrenceCount != null && item.totalRecurrence != null) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
                     progress = { item.recurrenceCount.toFloat() / item.totalRecurrence.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    trackColor = Color(0xFF262626),
+                    strokeCap = StrokeCap.Round,
+                    color = Color(0xFF7C3AED)
                 )
                 Text(
                     text = "${item.recurrenceCount} / ${item.totalRecurrence} Paid",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            
-            if (item.category == "Credit Cards" && item.outstandingAmount != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Outstanding: ${CurrencyFormatter.format(item.outstandingAmount, preferences)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    modifier = Modifier.padding(top = 2.dp),
+                    color = Color(0xFF9CA3AF)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             
+            // Bottom row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -125,12 +200,12 @@ fun RecurringItemCard(
                             Icons.Rounded.FlashOn,
                             contentDescription = "AutoPay",
                             tint = Color(0xFFFFB74D),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "AutoPay",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                             color = Color(0xFFFFB74D)
                         )
                     } else if (item.reminderDaysBefore > 0) {
@@ -138,39 +213,49 @@ fun RecurringItemCard(
                             Icons.Rounded.NotificationsActive,
                             contentDescription = "Reminder",
                             tint = Color(0xFFF43F5E),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Reminder On",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = "Reminder",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                             color = Color(0xFFF43F5E)
                         )
                     }
                 }
                 
-                if (item.status == "PENDING") {
-                    Button(
-                        onClick = onPay,
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 0.dp),
-                        modifier = Modifier.height(44.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
+                if (nextOccurrence != null) {
+                    Row(
+                        modifier = Modifier
+                            .clickable { onPay(nextOccurrence) }
+                            .padding(vertical = 4.dp, horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        Text("Pay Now", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(
+                            text = "Record",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            ),
+                            color = Color(0xFF7C3AED)
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = Color(0xFF7C3AED),
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
-                } else {
+                } else if (item.status == "ACTIVE") {
                     Surface(
                         color = Color(0xFF10B981).copy(alpha = 0.1f),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = "PAID",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            text = "ON SCHEDULE",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
                             color = Color(0xFF10B981)
                         )
                     }
@@ -188,4 +273,20 @@ fun getIconForCategory(category: String) = when (category) {
     "Insurance" -> Icons.Rounded.Security
     "SIP" -> Icons.Rounded.TrendingUp
     else -> Icons.Rounded.Category
+}
+
+private fun isToday(timestamp: Long): Boolean {
+    val cal1 = Calendar.getInstance()
+    val cal2 = Calendar.getInstance().apply { timeInMillis = timestamp }
+    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+}
+
+private fun getStartOfToday(): Long {
+    return Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 }

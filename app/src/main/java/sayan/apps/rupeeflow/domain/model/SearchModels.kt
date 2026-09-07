@@ -8,17 +8,14 @@ data class SearchFilters(
     val endDate: Long? = null,
     val categoryId: Long? = null,
     val accountId: Long? = null,
-    val merchantId: Long? = null,
     val type: TransactionType? = null,
-    val isRecurring: Boolean? = null,
-    val tags: List<String> = emptyList()
+    val isRecurring: Boolean? = null
 )
 
 sealed interface SearchResult {
     data class TransactionResult(val transaction: Transaction) : SearchResult
     data class AccountResult(val account: Account) : SearchResult
     data class CategoryResult(val category: Category) : SearchResult
-    data class MerchantResult(val name: String, val logoUrl: String?) : SearchResult
     data class RecurringResult(val item: RecurringItem) : SearchResult
     data class BudgetResult(val budget: Budget, val categoryName: String) : SearchResult
     data class GoalResult(val goal: Goal) : SearchResult

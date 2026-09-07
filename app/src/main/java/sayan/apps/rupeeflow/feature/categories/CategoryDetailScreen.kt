@@ -17,7 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import sayan.apps.rupeeflow.core.designsystem.components.BudgetProgressBar
 import sayan.apps.rupeeflow.domain.model.Category
 import sayan.apps.rupeeflow.domain.model.Transaction
 import sayan.apps.rupeeflow.domain.model.TransactionType
@@ -32,9 +33,26 @@ fun CategoryDetailScreen(
     var category by remember { mutableStateOf<Category?>(null) }
     val transactions by viewModel.getTransactionsForCategory(categoryId).collectAsState(initial = emptyList<Transaction>())
     val stats by viewModel.getCategoryStatsFlow(categoryId).collectAsState(initial = Pair(0, 0.0))
+    var showEditSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(categoryId) {
         category = viewModel.getCategoryById(categoryId)
+    }
+
+    if (showEditSheet) {
+        AddEditCategoryBottomSheet(
+            category = category,
+            onDismiss = { showEditSheet = false },
+            onConfirm = { 
+                viewModel.updateCategory(it)
+                category = it
+                showEditSheet = false 
+            },
+            onDelete = {
+                viewModel.deleteCategory(it)
+                onNavigateBack()
+            }
+        )
     }
 
     Scaffold(
@@ -47,7 +65,7 @@ fun CategoryDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Open edit */ }) {
+                    IconButton(onClick = { showEditSheet = true }) {
                         Icon(Icons.Rounded.Edit, contentDescription = "Edit")
                     }
                 },
@@ -155,7 +173,7 @@ fun StatItem(label: String, value: String) {
 
 @Composable
 fun BudgetProgress(spent: Double, budget: Double) {
-    val progress = (spent / budget).toFloat().coerceIn(0f, 1f)
+    val progress = if (budget > 0) (spent / budget).toFloat() else 0f
     val remaining = budget - spent
     
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -164,12 +182,9 @@ fun BudgetProgress(spent: Double, budget: Double) {
             Text("₹${String.format("%,.0f", budget)}", style = MaterialTheme.typography.labelMedium, color = Color.White)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            color = if (progress > 0.9f) Color.Red else Color(0xFF7C3AED),
-            trackColor = Color(0xFF1F2937),
-            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+        BudgetProgressBar(
+            progress = progress,
+            modifier = Modifier.fillMaxWidth().height(8.dp)
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(

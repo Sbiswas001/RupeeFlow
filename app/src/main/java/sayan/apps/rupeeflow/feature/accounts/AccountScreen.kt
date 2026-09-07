@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,14 +26,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import sayan.apps.rupeeflow.core.designsystem.theme.RupeeFlowTheme
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
+import sayan.apps.rupeeflow.core.util.DateUtils
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
 import sayan.apps.rupeeflow.domain.model.Account
 import sayan.apps.rupeeflow.domain.model.UserPreferences
 import androidx.compose.ui.draw.rotate
 import sayan.apps.rupeeflow.feature.accounts.components.AddAccountBottomSheet
 import sayan.apps.rupeeflow.feature.accounts.components.AccountTypeItem
+import sayan.apps.rupeeflow.feature.accounts.components.AddEditCustomUpiAppDialog
+import sayan.apps.rupeeflow.feature.accounts.components.AddEditDebitCardDialog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,11 +55,13 @@ fun AccountScreen(
     var showAddBottomSheet by remember { mutableStateOf(false) }
     var selectedTypeItem by remember { mutableStateOf<AccountTypeItem?>(null) }
     var showTransferDialog by remember { mutableStateOf(false) }
-    var accountToDelete by remember { mutableStateOf<Account?>(null) }
+    var accountToClose by remember { mutableStateOf<Account?>(null) }
+    var accountToReconcile by remember { mutableStateOf<Account?>(null) }
+    var accountToEdit by remember { mutableStateOf<Account?>(null) }
     var selectedCategory by remember { mutableStateOf("All") }
     var isFabExpanded by remember { mutableStateOf(false) }
 
-    val categories = listOf("All", "Banks", "Investments", "Credit", "Cash", "Liabilities")
+    val categories = listOf("All", "Banks", "Investments", "Credit", "Cash", "Liabilities", "Assets")
     
     val netWorth = accounts.filter { it.category != "LIABILITIES" }.sumOf { it.balance } - 
                    accounts.filter { it.category == "LIABILITIES" }.sumOf { it.balance }
@@ -67,21 +76,8 @@ fun AccountScreen(
                     .padding(innerPadding)
                     .fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(bottom = 100.dp, top = 16.dp)
             ) {
-                // Header
-                item {
-                    Text(
-                        text = "Portfolio",
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-1).sp
-                        ),
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-                        color = Color.White
-                    )
-                }
-
                 // Net Worth Hero Card
                 item {
                     NetWorthHero(
@@ -108,7 +104,7 @@ fun AccountScreen(
                                 onClick = { selectedCategory = category },
                                 label = { Text(category) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF10B981),
+                                    selectedContainerColor = RupeeFlowTheme.colors.income,
                                     selectedLabelColor = Color.Black,
                                     containerColor = Color.Transparent,
                                     labelColor = Color(0xFF9CA3AF)
@@ -127,11 +123,33 @@ fun AccountScreen(
 
                 // Account Sections
                 val filteredAccounts = if (selectedCategory == "All") accounts else {
-                    accounts.filter { it.category.contains(selectedCategory.uppercase().replace(" ", "_")) }
+                    accounts.filter { account ->
+                        when (selectedCategory) {
+                            "Banks" -> account.category == "BANKING" || account.category == "DEPOSITS"
+                            "Cash" -> account.category == "CASH_WALLETS"
+                            "Investments" -> account.category == "INVESTMENTS"
+                            "Credit" -> account.category == "CREDIT"
+                            "Liabilities" -> account.category == "LIABILITIES"
+                            "Assets" -> account.category == "ASSETS"
+                            else -> true
+                        }
+                    }
                 }
                 
                 val groupedAccounts = filteredAccounts.groupBy { it.category }
                 
+                if (accounts.isEmpty()) {
+                    item {
+                        EmptyAccountsState()
+                    }
+                } else if (filteredAccounts.isEmpty()) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                            Text("No accounts in this category", color = Color.Gray)
+                        }
+                    }
+                }
+
                 groupedAccounts.forEach { (category, accountList) ->
                     item {
                         Text(
@@ -141,12 +159,12 @@ fun AccountScreen(
                             color = Color(0xFF9CA3AF)
                         )
                     }
-                    items(accountList) { account ->
+                    items(accountList, key = { it.id }) { account ->
                         AccountItem(
                             account = account,
                             preferences = preferences,
-                            onClick = { /* Detail */ },
-                            onLongClick = { accountToDelete = account }
+                            onClick = { accountToReconcile = account },
+                            onLongClick = { accountToEdit = account }
                         )
                     }
                 }
@@ -219,22 +237,49 @@ fun AccountScreen(
             TransferDialog(
                 accounts = accounts,
                 onDismiss = { showTransferDialog = false },
-                onTransfer = { from, to, amount, note ->
-                    viewModel.transferFunds(from, to, amount, note.ifBlank { null })
+                onTransfer = { from, to, amount, note, timestamp ->
+                    viewModel.transferFunds(from, to, amount, note.ifBlank { null }, timestamp)
                     showTransferDialog = false
                 }
             )
         }
 
-        accountToDelete?.let { account ->
+        accountToClose?.let { account ->
             DeleteConfirmationDialog(
-                title = "Delete Account",
-                message = "Are you sure you want to delete '${account.name}'?",
+                title = "Close Account",
+                message = "Are you sure you want to close '${account.name}'? This will hide it from selection but preserve its transaction history and impact on your net worth.",
                 onConfirm = {
                     viewModel.deleteAccount(account)
-                    accountToDelete = null
+                    accountToClose = null
                 },
-                onDismiss = { accountToDelete = null }
+                onDismiss = { accountToClose = null }
+            )
+        }
+
+        accountToReconcile?.let { account ->
+            ReconcileBalanceDialog(
+                account = account,
+                preferences = preferences,
+                onDismiss = { accountToReconcile = null },
+                onConfirm = { actualBalance, reason, note ->
+                    viewModel.reconcileAccount(account.id, actualBalance, reason, note)
+                    accountToReconcile = null
+                }
+            )
+        }
+
+        accountToEdit?.let { account ->
+            EditAccountDialog(
+                account = account,
+                onDismiss = { accountToEdit = null },
+                onConfirm = { updatedAccount ->
+                    viewModel.updateAccount(updatedAccount)
+                    accountToEdit = null
+                },
+                onCloseAccount = {
+                    accountToClose = account
+                    accountToEdit = null
+                }
             )
         }
     }
@@ -258,17 +303,17 @@ fun NetWorthHero(netWorth: Double, accountCount: Int, preferences: UserPreferenc
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.TrendingUp, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Rounded.TrendingUp, contentDescription = null, tint = RupeeFlowTheme.colors.income, modifier = Modifier.size(16.dp))
                     Text(
                         text = CurrencyFormatter.format(5240.0, preferences), 
                         style = MaterialTheme.typography.labelMedium, 
-                        color = Color(0xFF10B981)
+                        color = RupeeFlowTheme.colors.income
                     )
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "$accountCount Accounts tracked",
+                text = "$accountCount Active Accounts",
                 style = MaterialTheme.typography.labelMedium,
                 color = Color(0xFF9CA3AF)
             )
@@ -342,22 +387,67 @@ fun AccountItem(
                     color = Color.White
                 )
                 Text(
-                    text = "${account.institutionName ?: ""} ${account.accountNumberLast4?.let { "•••• $it" } ?: ""}",
+                    text = "${account.institutionName ?: ""} ${account.accountNumberLast4?.let { "•••• $it" } ?: ""}".trim().ifEmpty { account.subType.replace("_", " ") },
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF9CA3AF)
                 )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Tap to reconcile • Long press to edit",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = Color(0xFF6B7280)
+                )
+            }
+
+            val sevenDaysAgo = DateUtils.getTimestampDaysAgo(7)
+            val lastRec = account.lastReconciledAt
+
+            val statusText = if (lastRec == null) {
+                "⚠ Needs reconciliation"
+            } else if (lastRec < sevenDaysAgo) {
+                "⚠ Reconciliation due (7+ days)"
+            } else {
+                val lastReconciled = Calendar.getInstance().apply { timeInMillis = lastRec }
+                val now = Calendar.getInstance()
+                val isToday = now.get(Calendar.YEAR) == lastReconciled.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) == lastReconciled.get(Calendar.DAY_OF_YEAR)
+                if (isToday) "✓ Reconciled today" else {
+                    val sdf = SimpleDateFormat("dd MMM", Locale.getDefault())
+                    "Last checked: ${sdf.format(Date(lastRec))}"
+                }
+            }
+
+            val statusColor = if (lastRec == null || lastRec < sevenDaysAgo) {
+                RupeeFlowTheme.colors.warning
+            } else {
+                val lastReconciled = Calendar.getInstance().apply { timeInMillis = lastRec }
+                val now = Calendar.getInstance()
+                val isToday = now.get(Calendar.YEAR) == lastReconciled.get(Calendar.YEAR) &&
+                        now.get(Calendar.DAY_OF_YEAR) == lastReconciled.get(Calendar.DAY_OF_YEAR)
+                if (isToday) RupeeFlowTheme.colors.income else Color(0xFF9CA3AF)
             }
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = CurrencyFormatter.format(account.balance, preferences),
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = if (account.category == "LIABILITIES") Color(0xFFEF4444) else Color.White
+                    color = if (account.category == "LIABILITIES") RupeeFlowTheme.colors.expense else Color.White
                 )
-                Text("Today", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9CA3AF).copy(alpha = 0.5f))
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor.copy(alpha = 0.8f)
+                )
             }
         }
     }
+}
+
+private fun getReconciliationStatus(account: Account): Pair<String, Color> {
+    // This is not @Composable, so we'll need to pass the colors or use the constants
+    // However, the caller IS @Composable (AccountItem).
+    // Let's refactor this to be a @Composable or return the color in the UI.
+    return "Dummy" to Color.White // Will replace actual logic below
 }
 
 fun getIconForAccount(subType: String) = when (subType) {
@@ -370,7 +460,39 @@ fun getIconForAccount(subType: String) = when (subType) {
     "STOCKS" -> Icons.AutoMirrored.Rounded.ShowChart
     "GOLD" -> Icons.Rounded.MilitaryTech
     "LOAN" -> Icons.Rounded.Home
+    "ASSET" -> Icons.Rounded.Apartment
     else -> Icons.Rounded.Category
+}
+
+@Composable
+fun EmptyAccountsState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 80.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Rounded.AccountBalance,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = Color(0xFF1F2937)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            "No accounts yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White
+        )
+        Text(
+            "Add your bank accounts, wallets, or investments to see your net worth.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray,
+            modifier = Modifier.padding(horizontal = 48.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+    }
 }
 
 @Composable
@@ -396,14 +518,30 @@ fun DynamicAddAccountDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name (e.g. SBI Savings)") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
                 )
                 
                 OutlinedTextField(
                     value = balance,
                     onValueChange = { balance = it },
                     label = { Text("Current Balance / Value") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
                 )
 
                 if (typeItem.category == "BANKING" || typeItem.category == "CREDIT") {
@@ -411,13 +549,29 @@ fun DynamicAddAccountDialog(
                         value = institution,
                         onValueChange = { institution = it },
                         label = { Text("Institution (e.g. HDFC)") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
                     )
                     OutlinedTextField(
                         value = last4,
                         onValueChange = { last4 = it },
                         label = { Text("Last 4 Digits") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
                     )
                 }
 
@@ -426,7 +580,15 @@ fun DynamicAddAccountDialog(
                         value = limit,
                         onValueChange = { limit = it },
                         label = { Text("Credit Limit") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
                     )
                 }
 
@@ -435,7 +597,15 @@ fun DynamicAddAccountDialog(
                         value = interestRate,
                         onValueChange = { interestRate = it },
                         label = { Text("Interest Rate (%)") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
                     )
                 }
             }
@@ -454,7 +624,7 @@ fun DynamicAddAccountDialog(
                     ) 
                 },
                 enabled = name.isNotBlank() && balance.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                colors = ButtonDefaults.buttonColors(containerColor = RupeeFlowTheme.colors.income)
             ) {
                 Text("Add", color = Color.Black)
             }
@@ -482,9 +652,9 @@ fun DeleteConfirmationDialog(
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                colors = ButtonDefaults.buttonColors(containerColor = RupeeFlowTheme.colors.expense)
             ) {
-                Text("Delete")
+                Text("Close Account")
             }
         },
         dismissButton = {
@@ -500,36 +670,84 @@ fun DeleteConfirmationDialog(
 fun TransferDialog(
     accounts: List<Account>,
     onDismiss: () -> Unit,
-    onTransfer: (Long, Long, Double, String) -> Unit
+    onTransfer: (fromAccountId: Long, toAccountId: Long, amount: Double, note: String, timestamp: Long) -> Unit,
+    title: String = "Move Money",
+    initialFromAccountId: Long? = null,
+    initialToAccountId: Long? = null,
+    initialAmount: String = "",
+    initialNote: String = "",
+    initialTimestamp: Long? = null
 ) {
-    var fromAccountId by remember { mutableStateOf(accounts.first().id) }
-    var toAccountId by remember { mutableStateOf(accounts.getOrNull(1)?.id ?: accounts.first().id) }
-    var amount by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var fromExpanded by remember { mutableStateOf(false) }
-    var toExpanded by remember { mutableStateOf(false) }
+    var fromAccountId by remember { mutableStateOf(initialFromAccountId ?: accounts.firstOrNull()?.id ?: 0L) }
+    var toAccountId by remember { mutableStateOf(initialToAccountId ?: accounts.getOrNull(1)?.id ?: accounts.firstOrNull()?.id ?: 0L) }
+    var amount by remember { mutableStateOf(initialAmount) }
+    var note by remember { mutableStateOf(initialNote) }
+    var selectedTimestamp by remember { mutableStateOf(initialTimestamp ?: System.currentTimeMillis()) }
+    var showFromDialog by remember { mutableStateOf(false) }
+    var showToDialog by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    val dateFormat = remember { SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()) }
+    val timeFormat = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF181818),
-        title = { Text("Move Money", color = Color.White) },
+        title = { Text(title, color = Color.White) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Simplified dropdowns for dark mode
-                TransferAccountSelector("From", accounts.find { it.id == fromAccountId }?.name ?: "", { fromExpanded = true })
-                TransferAccountSelector("To", accounts.find { it.id == toAccountId }?.name ?: "", { toExpanded = true })
+                TransferAccountSelector("From", accounts.find { it.id == fromAccountId }?.name ?: "Select Account", { showFromDialog = true })
+                TransferAccountSelector("To", accounts.find { it.id == toAccountId }?.name ?: "Select Account", { showToDialog = true })
 
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
                     label = { Text("Amount") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF10B981)
+                        focusedBorderColor = RupeeFlowTheme.colors.income
                     )
                 )
+
+                // Date & Time Selectors
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedCard(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFF1E1E1E))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Event, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = dateFormat.format(Date(selectedTimestamp)), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                        }
+                    }
+
+                    OutlinedCard(
+                        onClick = { showTimePicker = true },
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFF1E1E1E))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Schedule, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = timeFormat.format(Date(selectedTimestamp)), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = note,
@@ -545,9 +763,9 @@ fun TransferDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onTransfer(fromAccountId, toAccountId, amount.toDoubleOrNull() ?: 0.0, note) },
+                onClick = { onTransfer(fromAccountId, toAccountId, amount.toDoubleOrNull() ?: 0.0, note, selectedTimestamp) },
                 enabled = amount.isNotEmpty() && fromAccountId != toAccountId,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                colors = ButtonDefaults.buttonColors(containerColor = RupeeFlowTheme.colors.income)
             ) {
                 Text("Transfer", color = Color.Black)
             }
@@ -558,6 +776,512 @@ fun TransferDialog(
             }
         }
     )
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedTimestamp)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let {
+                        val calendar = Calendar.getInstance().apply { timeInMillis = selectedTimestamp }
+                        val timePart = calendar.get(Calendar.HOUR_OF_DAY) * 3600000L +
+                                       calendar.get(Calendar.MINUTE) * 60000L +
+                                       calendar.get(Calendar.SECOND) * 1000L +
+                                       calendar.get(Calendar.MILLISECOND)
+                        selectedTimestamp = it + timePart
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showTimePicker) {
+        val calendar = Calendar.getInstance().apply { timeInMillis = selectedTimestamp }
+        val timePickerState = rememberTimePickerState(
+            initialHour = calendar.get(Calendar.HOUR_OF_DAY),
+            initialMinute = calendar.get(Calendar.MINUTE)
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cal = Calendar.getInstance().apply {
+                        timeInMillis = selectedTimestamp
+                        set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                        set(Calendar.MINUTE, timePickerState.minute)
+                    }
+                    selectedTimestamp = cal.timeInMillis
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+            },
+            title = { Text("Select Time") },
+            text = { TimePicker(state = timePickerState) }
+        )
+    }
+
+    if (showFromDialog) {
+        AccountSelectionDialog(
+            accounts = accounts,
+            onDismiss = { showFromDialog = false },
+            onAccountSelected = { account ->
+                fromAccountId = account.id
+                showFromDialog = false
+            }
+        )
+    }
+
+    if (showToDialog) {
+        AccountSelectionDialog(
+            accounts = accounts,
+            onDismiss = { showToDialog = false },
+            onAccountSelected = { account ->
+                toAccountId = account.id
+                showToDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun AccountSelectionDialog(
+    accounts: List<Account>,
+    onDismiss: () -> Unit,
+    onAccountSelected: (Account) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF181818),
+        title = { Text("Select Account", color = Color.White) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (accounts.isEmpty()) {
+                    Text("No accounts found. Please add an account first.", color = Color.Gray)
+                }
+                accounts.forEach { account ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onAccountSelected(account) },
+                        color = Color(0xFF1F2937),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(account.name, color = Color.White)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+fun ReconcileBalanceDialog(
+    account: Account,
+    preferences: UserPreferences,
+    onDismiss: () -> Unit,
+    onConfirm: (Double, String?, String?) -> Unit
+) {
+    var actualBalanceStr by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+
+    val actualBalance = actualBalanceStr.toDoubleOrNull() ?: account.balance
+    val difference = actualBalance - account.balance
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF181818),
+        title = {
+            Text("Reconcile Balance", color = Color.White, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text("Account", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        Text(account.name, color = Color.White, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Recorded balance", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        Text(CurrencyFormatter.format(account.balance, preferences), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                OutlinedTextField(
+                    value = actualBalanceStr,
+                    onValueChange = { 
+                        if (it.isEmpty() || it.toDoubleOrNull() != null || (it == "-" && account.category == "LIABILITIES")) {
+                            actualBalanceStr = it 
+                        }
+                    },
+                    label = { Text("Actual balance") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f),
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+
+                if (actualBalanceStr.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Difference", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = (if (difference > 0) "+" else "") + CurrencyFormatter.format(difference, preferences),
+                            color = when {
+                                difference > 0 -> RupeeFlowTheme.colors.income
+                                difference < 0 -> RupeeFlowTheme.colors.expense
+                                else -> Color.White
+                            },
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it },
+                    label = { Text("Reason (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f),
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Note (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f),
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(actualBalance, reason.ifBlank { null }, note.ifBlank { null }) },
+                enabled = actualBalanceStr.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Confirm", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color.Gray)
+            }
+        }
+    )
+}
+
+@Composable
+fun EditAccountDialog(
+    account: Account,
+    viewModel: AccountViewModel = hiltViewModel(),
+    onDismiss: () -> Unit,
+    onConfirm: (Account) -> Unit,
+    onCloseAccount: () -> Unit
+) {
+    var name by remember { mutableStateOf(account.name) }
+    var institution by remember { mutableStateOf(account.institutionName ?: "") }
+    var last4 by remember { mutableStateOf(account.accountNumberLast4 ?: "") }
+    var limit by remember { mutableStateOf(account.creditLimit?.toString() ?: "") }
+    var interestRate by remember { mutableStateOf(account.interestRate?.toString() ?: "") }
+
+    var showAddDebitCardDialog by remember { mutableStateOf(false) }
+    var showAddUpiAppDialog by remember { mutableStateOf(false) }
+
+    val debitCards by viewModel.getDebitCardsForAccount(account.id).collectAsState(initial = emptyList())
+    val upiApps by viewModel.getUpiAppsForAccount(account.id).collectAsState(initial = emptyList())
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF181818),
+        title = { Text("Edit Account", color = Color.White) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Account Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF7C3AED),
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color(0xFF7C3AED),
+                        unfocusedLabelColor = Color.Gray
+                    )
+                )
+
+                if (account.category == "BANKING" || account.category == "CREDIT") {
+                    OutlinedTextField(
+                        value = institution,
+                        onValueChange = { institution = it },
+                        label = { Text("Institution") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
+                    )
+                    OutlinedTextField(
+                        value = last4,
+                        onValueChange = { last4 = it },
+                        label = { Text("Last 4 Digits") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
+                    )
+                }
+
+                if (account.category == "BANKING") {
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                    
+                    Text(
+                        "Payment Methods",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+
+                    // Debit Cards Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Debit Cards", style = MaterialTheme.typography.labelLarge, color = Color(0xFF9CA3AF))
+                        TextButton(onClick = { showAddDebitCardDialog = true }) {
+                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add Card")
+                        }
+                    }
+
+                    if (debitCards.isEmpty()) {
+                        Text("No saved debit cards", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    } else {
+                        debitCards.forEach { card ->
+                            Surface(
+                                color = Color(0xFF1E1E1E),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(card.cardName, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                        Text("•••• ${card.last4Digits} ${card.network ?: ""}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                    }
+                                    IconButton(onClick = { viewModel.deleteDebitCard(card) }) {
+                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = RupeeFlowTheme.colors.expense)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // UPI Apps Section
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("UPI Apps", style = MaterialTheme.typography.labelLarge, color = Color(0xFF9CA3AF))
+                        TextButton(onClick = { showAddUpiAppDialog = true }) {
+                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add App")
+                        }
+                    }
+
+                    val customUpiApps = upiApps.filter { it.isCustom }
+                    if (customUpiApps.isEmpty()) {
+                        Text("No custom UPI apps added", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    } else {
+                        customUpiApps.forEach { app ->
+                            Surface(
+                                color = Color(0xFF1E1E1E),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(app.appName, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                    IconButton(onClick = { viewModel.deleteUpiApp(app) }) {
+                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = RupeeFlowTheme.colors.expense)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (account.category == "CREDIT") {
+                    OutlinedTextField(
+                        value = limit,
+                        onValueChange = { limit = it },
+                        label = { Text("Credit Limit") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
+                    )
+                }
+
+                if (account.category == "DEPOSITS") {
+                    OutlinedTextField(
+                        value = interestRate,
+                        onValueChange = { interestRate = it },
+                        label = { Text("Interest Rate (%)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFF7C3AED),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedLabelColor = Color(0xFF7C3AED),
+                            unfocusedLabelColor = Color.Gray
+                        )
+                    )
+                }
+
+                TextButton(
+                    onClick = onCloseAccount,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Delete, contentDescription = null, tint = RupeeFlowTheme.colors.expense, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Close Account", color = RupeeFlowTheme.colors.expense)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(
+                        account.copy(
+                            name = name,
+                            institutionName = institution.ifBlank { null },
+                            accountNumberLast4 = last4.ifBlank { null },
+                            creditLimit = limit.toDoubleOrNull(),
+                            interestRate = interestRate.toDoubleOrNull()
+                        )
+                    )
+                },
+                enabled = name.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = RupeeFlowTheme.colors.income)
+            ) {
+                Text("Save", color = Color.Black)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = Color.White)
+            }
+        }
+    )
+
+    if (showAddDebitCardDialog) {
+        AddEditDebitCardDialog(
+            accountId = account.id,
+            onDismiss = { showAddDebitCardDialog = false },
+            onConfirm = { debitCard ->
+                viewModel.addDebitCard(debitCard)
+                showAddDebitCardDialog = false
+            }
+        )
+    }
+
+    if (showAddUpiAppDialog) {
+        AddEditCustomUpiAppDialog(
+            accountId = account.id,
+            onDismiss = { showAddUpiAppDialog = false },
+            onConfirm = { upiApp ->
+                viewModel.addUpiApp(upiApp)
+                showAddUpiAppDialog = false
+            }
+        )
+    }
 }
 
 @Composable

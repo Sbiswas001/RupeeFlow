@@ -1,0 +1,19 @@
+- [x] Phase 1: Deterministic Core (The "Fast Path")
+    - [x] Implement Hybrid Routing in `IntentExtractor` (Fast Path for common cmds)
+    - [x] Relaxed JSON Parsing (Markdown/Whitespace stripping)
+    - [x] Inject System Context (Date, Time, Locale) into prompts
+- [x] Phase 2: Intelligence & Performance
+    - [x] Add `confidence` and `source` metadata to `ToolResult`
+    - [x] Implement 30s Caching layer in `AiManager`
+    - [x] Enable True Streaming in `MediaPipeAiBackend`
+- [x] Phase 3: Advanced Orchestration
+    - [x] Build `ToolPlanner` for multi-step queries
+    - [x] Implement Semantic entity validation (Hallucination guardrail)
+    - [x] Personalized Merchant Learning in `KnowledgeGraph`
+- [ ] Phase 4: Financial Operating System (Next Gen)
+    - [x] Implement `InsightsEngine` (Spending Velocity, Trend Analysis)
+    - [x] Implement `FinancialTimelineTool` ("What happened this week?")
+    - [x] Implement `ProactiveInsightsTool` (Budget alerts, velocity warnings)
+    - [x] Enhanced Explainability in System Prompt
+    - [ ] Phase 9: Privacy Dashboard (UI)
+    - [ ] Phase 10: AI Benchmark Suite (Testing)

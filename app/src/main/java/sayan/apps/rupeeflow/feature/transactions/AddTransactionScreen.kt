@@ -4,9 +4,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -16,17 +16,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import sayan.apps.rupeeflow.core.designsystem.theme.EmeraldGreen
 import sayan.apps.rupeeflow.core.designsystem.theme.VibrantRed
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
-import sayan.apps.rupeeflow.domain.model.UPIApp
+import sayan.apps.rupeeflow.domain.model.PaymentMethodType
+import sayan.apps.rupeeflow.domain.model.TransactionType
+import sayan.apps.rupeeflow.feature.accounts.components.AddEditCustomUpiAppDialog
+import sayan.apps.rupeeflow.feature.accounts.components.AddEditDebitCardDialog
+import sayan.apps.rupeeflow.feature.categories.AddEditCategoryBottomSheet
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -48,10 +51,17 @@ fun AddTransactionScreen(
     val selectedAccountId by viewModel.selectedAccountId.collectAsState()
     val selectedCategoryId by viewModel.selectedCategoryId.collectAsState()
     val selectedTimestamp by viewModel.selectedTimestamp.collectAsState()
-    val upiTransactionId by viewModel.upiTransactionId.collectAsState()
-    val upiApp by viewModel.upiApp.collectAsState()
     val attachments by viewModel.attachments.collectAsState()
     val isEditMode by viewModel.isEditMode.collectAsState()
+
+    val showPaymentDetails by viewModel.showPaymentDetails.collectAsState()
+    val paymentMethodType by viewModel.paymentMethodType.collectAsState()
+    val upiTransactionId by viewModel.upiTransactionId.collectAsState()
+    val selectedUpiAppName by viewModel.selectedUpiAppName.collectAsState()
+    val selectedDebitCard by viewModel.selectedDebitCard.collectAsState()
+
+    val upiApps by viewModel.upiApps.collectAsState()
+    val debitCards by viewModel.debitCards.collectAsState()
 
     val attachmentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -71,14 +81,34 @@ fun AddTransactionScreen(
     var categoryExpanded by remember { mutableStateOf(false) }
     var accountExpanded by remember { mutableStateOf(false) }
     var upiExpanded by remember { mutableStateOf(false) }
-    var showUPISettings by remember { mutableStateOf(false) }
+    var cardExpanded by remember { mutableStateOf(false) }
+
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showAddCategorySheet by remember { mutableStateOf(false) }
+
+    var showInlineAddUpiDialog by remember { mutableStateOf(false) }
+    var showInlineAddCardDialog by remember { mutableStateOf(false) }
 
     val dateFormat = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault())
     val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (isEditMode) "Edit Transaction" else "Add Transaction") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Black,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        },
         containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
@@ -253,6 +283,29 @@ fun AddTransactionScreen(
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Add,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Add new Category",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        },
+                        onClick = {
+                            categoryExpanded = false
+                            showAddCategorySheet = true
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
                 }
             }
 
@@ -292,66 +345,153 @@ fun AddTransactionScreen(
                 }
             }
 
-            // UPI Section Toggle
+            // Payment Details Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
-                    checked = showUPISettings,
-                    onCheckedChange = { 
-                        showUPISettings = it 
-                        if (!it) viewModel.onUPIAppChange(null)
-                    }
+                    checked = showPaymentDetails,
+                    onCheckedChange = { viewModel.onTogglePaymentDetails(it) }
                 )
-                Text("Add UPI Details", style = MaterialTheme.typography.bodyMedium)
+                Text("Add UPI/Card Details", style = MaterialTheme.typography.bodyMedium)
             }
 
-            if (showUPISettings) {
-                // UPI App Selector
-                ExposedDropdownMenuBox(
-                    expanded = upiExpanded,
-                    onExpandedChange = { upiExpanded = !upiExpanded },
+            if (showPaymentDetails) {
+                // Payment Method Selector
+                SingleChoiceSegmentedButtonRow(
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    SegmentedButton(
+                        selected = paymentMethodType == PaymentMethodType.UPI,
+                        onClick = { viewModel.onPaymentMethodTypeChange(PaymentMethodType.UPI) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) {
+                        Text("📱 UPI")
+                    }
+                    SegmentedButton(
+                        selected = paymentMethodType == PaymentMethodType.DEBIT_CARD,
+                        onClick = { viewModel.onPaymentMethodTypeChange(PaymentMethodType.DEBIT_CARD) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) {
+                        Text("💳 Debit Card")
+                    }
+                }
+
+                if (paymentMethodType == PaymentMethodType.UPI) {
+                    // UPI App Dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = upiExpanded,
+                        onExpandedChange = { upiExpanded = !upiExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = selectedUpiAppName ?: "Select UPI App",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("UPI App") },
+                            leadingIcon = { Icon(Icons.Rounded.Smartphone, contentDescription = null) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = upiExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(type = MenuAnchorType.PrimaryEditable, enabled = true)
+                                .fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        ExposedDropdownMenu(
+                            expanded = upiExpanded,
+                            onDismissRequest = { upiExpanded = false }
+                        ) {
+                            upiApps.forEach { app ->
+                                DropdownMenuItem(
+                                    text = { Text(app.appName) },
+                                    onClick = {
+                                        viewModel.onUpiAppNameChange(app.appName)
+                                        upiExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("+ Add UPI App", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                                    }
+                                },
+                                onClick = {
+                                    upiExpanded = false
+                                    showInlineAddUpiDialog = true
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
+                    }
+
+                    // UPI Transaction ID Input
                     OutlinedTextField(
-                        value = upiApp?.name?.replace("_", " ") ?: "Select UPI App",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("UPI App") },
-                        leadingIcon = { Icon(Icons.Rounded.Smartphone, contentDescription = null) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = upiExpanded) },
-                        modifier = Modifier
-                            .menuAnchor(type = MenuAnchorType.PrimaryEditable, enabled = true)
-                            .fillMaxWidth(),
+                        value = upiTransactionId,
+                        onValueChange = viewModel::onUPITransactionIdChange,
+                        label = { Text("UPI Transaction ID") },
+                        leadingIcon = { Icon(Icons.Rounded.QrCode, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.medium
                     )
-                    ExposedDropdownMenu(
-                        expanded = upiExpanded,
-                        onDismissRequest = { upiExpanded = false }
+                } else if (paymentMethodType == PaymentMethodType.DEBIT_CARD) {
+                    // Debit Card Dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = cardExpanded,
+                        onExpandedChange = { cardExpanded = !cardExpanded },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        UPIApp.entries.forEach { app ->
+                        val cardText = selectedDebitCard?.let { "${it.cardName} •••• ${it.last4Digits}" } 
+                            ?: if (debitCards.isEmpty()) "No debit cards saved" else "Select Debit Card"
+
+                        OutlinedTextField(
+                            value = cardText,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Debit Card") },
+                            leadingIcon = { Icon(Icons.Rounded.CreditCard, contentDescription = null) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cardExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(type = MenuAnchorType.PrimaryEditable, enabled = true)
+                                .fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        ExposedDropdownMenu(
+                            expanded = cardExpanded,
+                            onDismissRequest = { cardExpanded = false }
+                        ) {
+                            debitCards.forEach { card ->
+                                DropdownMenuItem(
+                                    text = { Text("${card.cardName} •••• ${card.last4Digits}") },
+                                    onClick = {
+                                        viewModel.onDebitCardChange(card)
+                                        cardExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                            HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text(app.name.replace("_", " ")) },
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Rounded.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text("+ Add Debit Card", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                                    }
+                                },
                                 onClick = {
-                                    viewModel.onUPIAppChange(app)
-                                    upiExpanded = false
+                                    cardExpanded = false
+                                    showInlineAddCardDialog = true
                                 },
                                 contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                             )
                         }
                     }
                 }
-
-                // UPI ID Input
-                OutlinedTextField(
-                    value = upiTransactionId,
-                    onValueChange = viewModel::onUPITransactionIdChange,
-                    label = { Text("UPI Transaction ID") },
-                    leadingIcon = { Icon(Icons.Rounded.QrCode, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
-                )
             }
 
             // Note Field
@@ -482,6 +622,45 @@ fun AddTransactionScreen(
                 title = { Text("Select Time") },
                 text = { TimePicker(state = timePickerState) }
             )
+        }
+
+        if (showAddCategorySheet) {
+            val currentType = if (isIncome) TransactionType.INCOME else TransactionType.EXPENSE
+            AddEditCategoryBottomSheet(
+                defaultType = currentType,
+                existingCategories = categories,
+                onDismiss = { showAddCategorySheet = false },
+                onConfirm = { newCategory ->
+                    viewModel.addCategory(newCategory)
+                    showAddCategorySheet = false
+                }
+            )
+        }
+
+        if (showInlineAddUpiDialog) {
+            selectedAccountId?.let { accountId ->
+                AddEditCustomUpiAppDialog(
+                    accountId = accountId,
+                    onDismiss = { showInlineAddUpiDialog = false },
+                    onConfirm = { app ->
+                        viewModel.addCustomUpiAppInline(app.appName, app.appPackage)
+                        showInlineAddUpiDialog = false
+                    }
+                )
+            }
+        }
+
+        if (showInlineAddCardDialog) {
+            selectedAccountId?.let { accountId ->
+                AddEditDebitCardDialog(
+                    accountId = accountId,
+                    onDismiss = { showInlineAddCardDialog = false },
+                    onConfirm = { card ->
+                        viewModel.addDebitCardInline(card.cardName, card.last4Digits, card.network, card.nickname)
+                        showInlineAddCardDialog = false
+                    }
+                )
+            }
         }
     }
 }

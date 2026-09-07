@@ -28,5 +28,8 @@ data class AccountEntity(
     val tenureMonths: Int? = null,
     val upiId: String? = null,
     val colorHex: String? = null,
+    val lastReconciledAt: Long? = null,
+    val lastReconciledBalance: Double? = null,
+    val isClosed: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis()
 )

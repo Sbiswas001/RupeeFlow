@@ -14,7 +14,9 @@ import sayan.apps.rupeeflow.domain.repository.AccountRepository
 import sayan.apps.rupeeflow.domain.repository.CategoryRepository
 import sayan.apps.rupeeflow.domain.repository.PlanningRepository
 import sayan.apps.rupeeflow.domain.repository.RecurringRepository
+import sayan.apps.rupeeflow.core.database.repository.BackupRepositoryImpl
 import sayan.apps.rupeeflow.core.database.repository.SearchRepositoryImpl
+import sayan.apps.rupeeflow.domain.repository.BackupRepository
 import sayan.apps.rupeeflow.domain.repository.SearchRepository
 import sayan.apps.rupeeflow.domain.repository.TransactionRepository
 import sayan.apps.rupeeflow.domain.repository.UserPreferencesRepository
@@ -65,4 +67,10 @@ abstract class RepositoryModule {
     abstract fun bindSearchRepository(
         searchRepositoryImpl: SearchRepositoryImpl
     ): SearchRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBackupRepository(
+        backupRepositoryImpl: BackupRepositoryImpl
+    ): BackupRepository
 }

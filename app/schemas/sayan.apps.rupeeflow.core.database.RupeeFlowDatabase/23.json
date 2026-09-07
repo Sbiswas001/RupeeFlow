@@ -1,0 +1,859 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 23,
+    "identityHash": "85f06d038fe727c9cdd31e63a723a966",
+    "entities": [
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `amount` REAL NOT NULL, `type` TEXT NOT NULL, `categoryId` INTEGER, `accountId` INTEGER, `timestamp` INTEGER NOT NULL, `note` TEXT, `isRecurring` INTEGER NOT NULL, `upiTransactionId` TEXT, `upiApp` TEXT, `upiLinkedBank` TEXT, `previousBalance` REAL, `actualBalance` REAL, `reconciliationReason` TEXT, `accountNameSnapshot` TEXT, `accountCategorySnapshot` TEXT, `transferId` TEXT, `transferAccountId` INTEGER, `transferAccountNameSnapshot` TEXT, `isIncoming` INTEGER NOT NULL, FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`accountId`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isRecurring",
+            "columnName": "isRecurring",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "upiTransactionId",
+            "columnName": "upiTransactionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "upiApp",
+            "columnName": "upiApp",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "upiLinkedBank",
+            "columnName": "upiLinkedBank",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "previousBalance",
+            "columnName": "previousBalance",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "actualBalance",
+            "columnName": "actualBalance",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "reconciliationReason",
+            "columnName": "reconciliationReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountNameSnapshot",
+            "columnName": "accountNameSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountCategorySnapshot",
+            "columnName": "accountCategorySnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transferId",
+            "columnName": "transferId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transferAccountId",
+            "columnName": "transferAccountId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transferAccountNameSnapshot",
+            "columnName": "transferAccountNameSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isIncoming",
+            "columnName": "isIncoming",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_categoryId",
+            "unique": false,
+            "columnNames": [
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_categoryId` ON `${TABLE_NAME}` (`categoryId`)"
+          },
+          {
+            "name": "index_transactions_accountId",
+            "unique": false,
+            "columnNames": [
+              "accountId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_accountId` ON `${TABLE_NAME}` (`accountId`)"
+          },
+          {
+            "name": "index_transactions_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          },
+          {
+            "name": "index_transactions_transferId",
+            "unique": false,
+            "columnNames": [
+              "transferId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_transferId` ON `${TABLE_NAME}` (`transferId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "categories",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "categoryId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "accounts",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "accountId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "accounts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `subType` TEXT NOT NULL, `balance` REAL NOT NULL, `institutionName` TEXT, `accountNumberLast4` TEXT, `creditLimit` REAL, `interestRate` REAL, `maturityDate` INTEGER, `principalAmount` REAL, `tenureMonths` INTEGER, `upiId` TEXT, `colorHex` TEXT, `lastReconciledAt` INTEGER, `lastReconciledBalance` REAL, `isClosed` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subType",
+            "columnName": "subType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "balance",
+            "columnName": "balance",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "institutionName",
+            "columnName": "institutionName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountNumberLast4",
+            "columnName": "accountNumberLast4",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "creditLimit",
+            "columnName": "creditLimit",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "interestRate",
+            "columnName": "interestRate",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "maturityDate",
+            "columnName": "maturityDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "principalAmount",
+            "columnName": "principalAmount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "tenureMonths",
+            "columnName": "tenureMonths",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "upiId",
+            "columnName": "upiId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "colorHex",
+            "columnName": "colorHex",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastReconciledAt",
+            "columnName": "lastReconciledAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastReconciledBalance",
+            "columnName": "lastReconciledBalance",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "isClosed",
+            "columnName": "isClosed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "lastUpdated",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "budgets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `categoryId` INTEGER NOT NULL, `limitAmount` REAL NOT NULL, `period` TEXT NOT NULL, `startDate` INTEGER NOT NULL, `notified80Percent` INTEGER NOT NULL, `notified100Percent` INTEGER NOT NULL, `lastNotifiedPeriodStart` INTEGER NOT NULL, FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "limitAmount",
+            "columnName": "limitAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "period",
+            "columnName": "period",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notified80Percent",
+            "columnName": "notified80Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notified100Percent",
+            "columnName": "notified100Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastNotifiedPeriodStart",
+            "columnName": "lastNotifiedPeriodStart",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_budgets_categoryId",
+            "unique": true,
+            "columnNames": [
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_budgets_categoryId` ON `${TABLE_NAME}` (`categoryId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "categories",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "categoryId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "categories",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `colorHex` TEXT NOT NULL, `type` TEXT NOT NULL, `budget` REAL, `parentCategoryId` INTEGER, `isDeleted` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorHex",
+            "columnName": "colorHex",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "budget",
+            "columnName": "budget",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "parentCategoryId",
+            "columnName": "parentCategoryId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isDeleted",
+            "columnName": "isDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "recurring_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `amount` REAL NOT NULL, `dueDate` INTEGER NOT NULL, `isAutoPay` INTEGER NOT NULL, `status` TEXT NOT NULL, `frequency` TEXT NOT NULL, `frequencyInterval` INTEGER NOT NULL, `frequencyUnit` TEXT NOT NULL, `category` TEXT NOT NULL, `categoryId` INTEGER, `subCategory` TEXT, `iconRes` INTEGER, `reminderDaysBefore` INTEGER NOT NULL, `paymentMethod` TEXT, `defaultAccountId` INTEGER, `notes` TEXT, `recurrenceCount` INTEGER, `totalRecurrence` INTEGER, `outstandingAmount` REAL, `minimumDue` REAL, `lastPaidDate` INTEGER, `lastGeneratedOccurrenceDate` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDate",
+            "columnName": "dueDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAutoPay",
+            "columnName": "isAutoPay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequency",
+            "columnName": "frequency",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequencyInterval",
+            "columnName": "frequencyInterval",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frequencyUnit",
+            "columnName": "frequencyUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "subCategory",
+            "columnName": "subCategory",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "iconRes",
+            "columnName": "iconRes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "reminderDaysBefore",
+            "columnName": "reminderDaysBefore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paymentMethod",
+            "columnName": "paymentMethod",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "defaultAccountId",
+            "columnName": "defaultAccountId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recurrenceCount",
+            "columnName": "recurrenceCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "totalRecurrence",
+            "columnName": "totalRecurrence",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "outstandingAmount",
+            "columnName": "outstandingAmount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "minimumDue",
+            "columnName": "minimumDue",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "lastPaidDate",
+            "columnName": "lastPaidDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastGeneratedOccurrenceDate",
+            "columnName": "lastGeneratedOccurrenceDate",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "recurring_occurrences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recurringItemId` INTEGER, `scheduledDate` INTEGER NOT NULL, `status` TEXT NOT NULL, `transactionId` INTEGER, `paymentDate` INTEGER, `accountId` INTEGER, `notes` TEXT, `recurringItemNameSnapshot` TEXT, `accountNameSnapshot` TEXT, FOREIGN KEY(`recurringItemId`) REFERENCES `recurring_items`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`transactionId`) REFERENCES `transactions`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , FOREIGN KEY(`accountId`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recurringItemId",
+            "columnName": "recurringItemId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "scheduledDate",
+            "columnName": "scheduledDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionId",
+            "columnName": "transactionId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "paymentDate",
+            "columnName": "paymentDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recurringItemNameSnapshot",
+            "columnName": "recurringItemNameSnapshot",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accountNameSnapshot",
+            "columnName": "accountNameSnapshot",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recurring_occurrences_recurringItemId",
+            "unique": false,
+            "columnNames": [
+              "recurringItemId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recurring_occurrences_recurringItemId` ON `${TABLE_NAME}` (`recurringItemId`)"
+          },
+          {
+            "name": "index_recurring_occurrences_transactionId",
+            "unique": false,
+            "columnNames": [
+              "transactionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recurring_occurrences_transactionId` ON `${TABLE_NAME}` (`transactionId`)"
+          },
+          {
+            "name": "index_recurring_occurrences_accountId",
+            "unique": false,
+            "columnNames": [
+              "accountId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recurring_occurrences_accountId` ON `${TABLE_NAME}` (`accountId`)"
+          },
+          {
+            "name": "index_recurring_occurrences_recurringItemId_scheduledDate",
+            "unique": true,
+            "columnNames": [
+              "recurringItemId",
+              "scheduledDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_recurring_occurrences_recurringItemId_scheduledDate` ON `${TABLE_NAME}` (`recurringItemId`, `scheduledDate`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "recurring_items",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "recurringItemId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "transactions",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "transactionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "accounts",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "accountId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "goals",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `targetAmount` REAL NOT NULL, `currentAmount` REAL NOT NULL, `targetDate` INTEGER, `notified50Percent` INTEGER NOT NULL, `notified90Percent` INTEGER NOT NULL, `notified100Percent` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetAmount",
+            "columnName": "targetAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentAmount",
+            "columnName": "currentAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetDate",
+            "columnName": "targetDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notified50Percent",
+            "columnName": "notified50Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notified90Percent",
+            "columnName": "notified90Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notified100Percent",
+            "columnName": "notified100Percent",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "attachments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `transactionId` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `fileType` TEXT NOT NULL, FOREIGN KEY(`transactionId`) REFERENCES `transactions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionId",
+            "columnName": "transactionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileType",
+            "columnName": "fileType",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "transactions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "transactionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "recent_searches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`query` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`query`))",
+        "fields": [
+          {
+            "fieldPath": "query",
+            "columnName": "query",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "query"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '85f06d038fe727c9cdd31e63a723a966')"
+    ]
+  }
+}

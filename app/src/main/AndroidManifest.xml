@@ -3,7 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
         android:name=".RupeeFlowApplication"
@@ -38,6 +40,42 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <receiver
+            android:name=".feature.widget.BalanceWidgetReceiver"
+            android:exported="true"
+            android:label="RupeeFlow Balance">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/balance_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".feature.widget.SpendingWidgetReceiver"
+            android:exported="true"
+            android:label="RupeeFlow Spending">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spending_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".feature.widget.UpcomingWidgetReceiver"
+            android:exported="true"
+            android:label="RupeeFlow Upcoming">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/upcoming_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

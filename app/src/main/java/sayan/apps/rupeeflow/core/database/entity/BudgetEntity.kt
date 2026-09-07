@@ -27,5 +27,8 @@ data class BudgetEntity(
     val categoryId: Long,
     val limitAmount: Double,
     val period: BudgetPeriod,
-    val startDate: Long
+    val startDate: Long,
+    val notified80Percent: Boolean = false,
+    val notified100Percent: Boolean = false,
+    val lastNotifiedPeriodStart: Long = 0L
 )

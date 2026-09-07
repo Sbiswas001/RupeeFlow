@@ -1,42 +1,40 @@
 package sayan.apps.rupeeflow.feature.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowWidthSizeClass
-import java.util.Locale
-import sayan.apps.rupeeflow.core.designsystem.theme.EmeraldGreen
 import sayan.apps.rupeeflow.core.designsystem.theme.RupeeFlowTheme
-import sayan.apps.rupeeflow.core.util.CurrencyFormatter
-import sayan.apps.rupeeflow.core.util.LocalUserPreferences
-import sayan.apps.rupeeflow.domain.model.Transaction
-import sayan.apps.rupeeflow.feature.transactions.components.TransactionItem
+import sayan.apps.rupeeflow.feature.dashboard.components.*
 
 @Composable
 fun DashboardScreen(
     onNavigateToAdd: () -> Unit,
     onNavigateToDetail: (Long) -> Unit,
+    onNavigateToUpcoming: () -> Unit,
+    onNavigateToEditRecurring: (Long) -> Unit,
+    onNavigateToAccountDetails: (Long) -> Unit,
+    onNavigateToInsightsTab: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val adaptiveInfo = currentWindowAdaptiveInfo()
     val isExpanded = adaptiveInfo.windowSizeClass.windowWidthSizeClass == WindowWidthSizeClass.EXPANDED
 
@@ -47,57 +45,48 @@ fun DashboardScreen(
                 onClick = onNavigateToAdd,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp)
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add Transaction")
+                Icon(Icons.Rounded.Add, contentDescription = "Add Transaction", modifier = Modifier.size(24.dp))
             }
         },
         containerColor = Color.Transparent
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                text = "Dashboard",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (isExpanded) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        BalanceCard(balance = uiState.totalBalance)
-                    }
-                    Column(modifier = Modifier.weight(1.2f)) {
-                        RecentTransactionsHeader()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        RecentTransactionsList(
-                            transactions = uiState.recentTransactions,
-                            onTransactionClick = onNavigateToDetail
-                        )
-                    }
+            AnimatedVisibility(
+                visible = uiState.isLoading,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
-            } else {
-                BalanceCard(balance = uiState.totalBalance)
-                Spacer(modifier = Modifier.height(32.dp))
-                RecentTransactionsHeader()
-                Spacer(modifier = Modifier.height(16.dp))
-                RecentTransactionsList(
-                    transactions = uiState.recentTransactions,
-                    onTransactionClick = onNavigateToDetail
+            }
+
+            AnimatedVisibility(
+                visible = !uiState.isLoading,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                DashboardContent(
+                    uiState = uiState,
+                    isExpanded = isExpanded,
+                    onTransactionClick = onNavigateToDetail,
+                    onViewAllUpcoming = onNavigateToUpcoming,
+                    onNavigateToInsightsTab = onNavigateToInsightsTab,
+                    onAccountClick = onNavigateToAccountDetails,
+                    onAttentionClick = { item ->
+                        when (item) {
+                            is AttentionItem.ReconcileAccount -> onNavigateToAccountDetails(item.account.id)
+                            is AttentionItem.OverduePayment -> onNavigateToEditRecurring(item.occurrence.recurringItemId ?: 0L)
+                            is AttentionItem.MissingAutoPayAccount -> onNavigateToEditRecurring(item.itemId)
+                        }
+                    }
                 )
             }
         }
@@ -105,77 +94,157 @@ fun DashboardScreen(
 }
 
 @Composable
-fun RecentTransactionsHeader() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "Recent Transactions",
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Icon(
-            imageVector = Icons.Rounded.History,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-@Composable
-fun RecentTransactionsList(
-    transactions: List<Transaction>,
-    onTransactionClick: (Long) -> Unit
+fun DashboardContent(
+    uiState: DashboardState,
+    isExpanded: Boolean,
+    onTransactionClick: (Long) -> Unit,
+    onViewAllUpcoming: () -> Unit,
+    onNavigateToInsightsTab: (Int) -> Unit,
+    onAccountClick: (Long) -> Unit,
+    onAttentionClick: (AttentionItem) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)
-    ) {
-        items(transactions) { transaction ->
-            TransactionItem(
-                transaction = transaction,
-                onClick = { onTransactionClick(transaction.id.toLong()) }
-            )
-        }
-    }
-}
-
-@Composable
-fun BalanceCard(balance: Double) {
-    val preferences = LocalUserPreferences.current
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp),
-        shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = EmeraldGreen
-        )
-    ) {
-        Column(
+    if (isExpanded) {
+        Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(28.dp),
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(32.dp)
         ) {
-            Text(
-                text = "Total Balance",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.Black.copy(alpha = 0.7f)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = CurrencyFormatter.format(balance, preferences),
-                style = MaterialTheme.typography.displayMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-1).sp
-                ),
-                color = Color.Black
-            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 0.dp, bottom = 160.dp)
+            ) {
+                item {
+                    NetWorthCard(
+                        netWorth = uiState.netWorth,
+                        trend = uiState.netWorthTrend,
+                        trendLabel = uiState.netWorthTrendLabel,
+                        history = uiState.netWorthHistory
+                    )
+                }
+                item {
+                    SafeToSpendDashboardCard(
+                        safeToSpendResult = uiState.safeToSpendResult,
+                        onClick = { onNavigateToInsightsTab(1) }
+                    )
+                }
+                item {
+                    FinancialHealthDashboardCard(
+                        healthResult = uiState.healthResult,
+                        onClick = { onNavigateToInsightsTab(2) }
+                    )
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.weight(1.2f),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 0.dp, bottom = 160.dp)
+            ) {
+                item {
+                    CashFlowSummary(
+                        income = uiState.monthlyIncome,
+                        spending = uiState.monthlySpending,
+                        savings = uiState.monthlySavings
+                    )
+                }
+                item {
+                    QuickActivityRow(
+                        lastTransaction = uiState.lastTransaction,
+                        nextUpcoming = uiState.nextUpcomingOccurrence,
+                        onTransactionClick = onTransactionClick,
+                        onUpcomingClick = onViewAllUpcoming
+                    )
+                }
+                if (uiState.attentionItems.isNotEmpty()) {
+                    item {
+                        NeedsAttentionSection(
+                            items = uiState.attentionItems,
+                            onAttentionClick = onAttentionClick
+                        )
+                    }
+                }
+                item {
+                    AccountsSnapshot(
+                        accounts = uiState.accounts,
+                        onAccountClick = { account -> onAccountClick(account.id) },
+                        onViewAllClick = { onAccountClick(0L) }
+                    )
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 0.dp, bottom = 160.dp)
+        ) {
+            // 1. Net Worth Hero
+            item {
+                NetWorthCard(
+                    netWorth = uiState.netWorth,
+                    trend = uiState.netWorthTrend,
+                    trendLabel = uiState.netWorthTrendLabel,
+                    history = uiState.netWorthHistory
+                )
+            }
+
+            // 2. Safe to Spend Today Hero Card (Clicking redirects to Planning)
+            item {
+                SafeToSpendDashboardCard(
+                    safeToSpendResult = uiState.safeToSpendResult,
+                    onClick = { onNavigateToInsightsTab(1) }
+                )
+            }
+
+            // 3. Cash Flow Summary (This Month)
+            item {
+                CashFlowSummary(
+                    income = uiState.monthlyIncome,
+                    spending = uiState.monthlySpending,
+                    savings = uiState.monthlySavings
+                )
+            }
+
+            // 4. Side-by-side Last Activity & Next Upcoming Bill
+            item {
+                QuickActivityRow(
+                    lastTransaction = uiState.lastTransaction,
+                    nextUpcoming = uiState.nextUpcomingOccurrence,
+                    onTransactionClick = onTransactionClick,
+                    onUpcomingClick = onViewAllUpcoming
+                )
+            }
+
+            // 5. Needs Attention (Dynamic)
+            if (uiState.attentionItems.isNotEmpty()) {
+                item {
+                    NeedsAttentionSection(
+                        items = uiState.attentionItems,
+                        onAttentionClick = onAttentionClick
+                    )
+                }
+            }
+
+            // 6. Accounts Snapshot
+            item {
+                AccountsSnapshot(
+                    accounts = uiState.accounts,
+                    onAccountClick = { account -> onAccountClick(account.id) },
+                    onViewAllClick = { onAccountClick(0L) }
+                )
+            }
+
+            // 7. Financial Health Summary Card (Clicking redirects to Reports)
+            item {
+                FinancialHealthDashboardCard(
+                    healthResult = uiState.healthResult,
+                    onClick = { onNavigateToInsightsTab(2) }
+                )
+            }
         }
     }
 }
@@ -183,15 +252,13 @@ fun BalanceCard(balance: Double) {
 @Preview(showBackground = true, widthDp = 412)
 @Composable
 fun DashboardPhonePreview() {
-    RupeeFlowTheme {
-        DashboardScreen(onNavigateToAdd = {}, onNavigateToDetail = {})
-    }
-}
-
-@Preview(showBackground = true, widthDp = 900)
-@Composable
-fun DashboardTabletPreview() {
-    RupeeFlowTheme {
-        DashboardScreen(onNavigateToAdd = {}, onNavigateToDetail = {})
+    RupeeFlowTheme(amoledBlack = false, dynamicColor = false) {
+        DashboardScreen(
+            onNavigateToAdd = {},
+            onNavigateToDetail = {},
+            onNavigateToUpcoming = {},
+            onNavigateToEditRecurring = {},
+            onNavigateToAccountDetails = {}
+        )
     }
 }

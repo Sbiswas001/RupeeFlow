@@ -8,12 +8,17 @@ import androidx.core.app.NotificationCompat
 import sayan.apps.rupeeflow.R
 
 object NotificationHelper {
-    private const val CHANNEL_ID = "payment_reminders"
-    private const val CHANNEL_NAME = "Payment Reminders"
-    private const val CHANNEL_DESC = "Notifications for upcoming bills and SIPs"
+    private const val CHANNEL_ID = "rupeeflow_notifications"
+    private const val CHANNEL_NAME = "RupeeFlow Notifications"
+    private const val CHANNEL_DESC = "Notifications for bills, budgets, and goals"
 
-    fun showPaymentNotification(context: Context, title: String, message: String) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    fun showNotification(
+        context: Context,
+        title: String,
+        message: String,
+        notificationId: Int = System.currentTimeMillis().toInt()
+    ) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
@@ -23,13 +28,17 @@ object NotificationHelper {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Replace with app icon later
+            .setSmallIcon(android.R.drawable.ic_dialog_info) 
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        notificationManager.notify(notificationId, notification)
+    }
+
+    fun showPaymentNotification(context: Context, title: String, message: String) {
+        showNotification(context, title, message)
     }
 }

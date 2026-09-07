@@ -1,5 +1,8 @@
 package sayan.apps.rupeeflow.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Account(
     val id: Long = 0,
     val name: String,
@@ -15,5 +18,8 @@ data class Account(
     val tenureMonths: Int? = null,
     val upiId: String? = null,
     val colorHex: String? = null,
+    val lastReconciledAt: Long? = null,
+    val lastReconciledBalance: Double? = null,
+    val isClosed: Boolean = false,
     val lastUpdated: Long = System.currentTimeMillis()
 )

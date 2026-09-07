@@ -73,4 +73,69 @@ object DateUtils {
             set(Calendar.MILLISECOND, 999)
         }.timeInMillis
     }
+
+    fun getStartOfToday(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    fun getEndOfToday(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
+
+    fun getStartOfWeek(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    fun getStartOfPreviousMonth(): Long {
+        return Calendar.getInstance().apply {
+            add(Calendar.MONTH, -1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    fun getEndOfPreviousMonth(): Long {
+        return Calendar.getInstance().apply {
+            add(Calendar.MONTH, -1)
+            set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
+
+    fun getTimestampDaysAgo(days: Int): Long {
+        return System.currentTimeMillis() - (days.toLong() * 24 * 60 * 60 * 1000)
+    }
+
+    fun calculateNextDueDate(currentDate: Long, interval: Int, unit: String): Long {
+        val calendar = Calendar.getInstance().apply { timeInMillis = currentDate }
+        when (unit.uppercase()) {
+            "DAYS" -> calendar.add(Calendar.DAY_OF_YEAR, interval)
+            "WEEKS" -> calendar.add(Calendar.WEEK_OF_YEAR, interval)
+            "MONTHS" -> calendar.add(Calendar.MONTH, interval)
+            "YEARS" -> calendar.add(Calendar.YEAR, interval)
+        }
+        return calendar.timeInMillis
+    }
 }

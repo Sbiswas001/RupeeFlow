@@ -6,14 +6,8 @@ import sayan.apps.rupeeflow.core.database.entity.CategoryEntity
 
 @Dao
 interface CategoryDao {
-    @Query("SELECT * FROM categories ORDER BY name ASC")
+    @Query("SELECT * FROM categories WHERE isDeleted = 0 ORDER BY name ASC")
     fun getAllCategories(): Flow<List<CategoryEntity>>
-
-    @Query("SELECT * FROM categories WHERE isArchived = 0 ORDER BY name ASC")
-    fun getActiveCategories(): Flow<List<CategoryEntity>>
-
-    @Query("SELECT * FROM categories WHERE isArchived = 1 ORDER BY name ASC")
-    fun getArchivedCategories(): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories WHERE id = :id")
     suspend fun getCategoryById(id: Long): CategoryEntity?
@@ -27,9 +21,18 @@ interface CategoryDao {
     @Delete
     suspend fun deleteCategory(category: CategoryEntity)
 
-    @Query("UPDATE categories SET isArchived = :isArchived WHERE id = :id")
-    suspend fun setArchived(id: Long, isArchived: Boolean)
+    @Query("UPDATE categories SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDeleteCategory(id: Long)
 
-    @Query("SELECT * FROM categories WHERE name LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM categories WHERE isDeleted = 0 AND name LIKE '%' || :query || '%'")
     fun searchCategories(query: String): Flow<List<CategoryEntity>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE categoryId = :categoryId)")
+    suspend fun isCategoryInUse(categoryId: Long): Boolean
+
+    @Query("UPDATE transactions SET categoryId = :targetCategoryId WHERE categoryId = :sourceCategoryId")
+    suspend fun reassignTransactions(sourceCategoryId: Long, targetCategoryId: Long?)
+
+    @Query("DELETE FROM categories")
+    suspend fun clearAllCategories()
 }

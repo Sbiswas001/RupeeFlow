@@ -10,7 +10,7 @@ sealed interface NavRoute : NavKey
 data object Dashboard : NavRoute
 
 @Serializable
-data object Activity : NavRoute
+data class Activity(val initialTab: Int = 0) : NavRoute
 
 @Serializable
 data object AddTransaction : NavRoute
@@ -19,7 +19,7 @@ data object AddTransaction : NavRoute
 data object Accounts : NavRoute
 
 @Serializable
-data object Insights : NavRoute
+data class Insights(val initialTab: Int = 0) : NavRoute
 
 @Serializable
 data object Recurring : NavRoute
@@ -34,34 +34,19 @@ data object NetWorth : NavRoute
 data object Search : NavRoute
 
 @Serializable
+data object AllCategoryBreakdown : NavRoute
+
+@Serializable
 data object Categories : NavRoute
 
 @Serializable
-data object Merchants : NavRoute
-
-@Serializable
-data object Tags : NavRoute
-
-@Serializable
-data object Archived : NavRoute
-
-@Serializable
 data object BackupRestore : NavRoute
-
-@Serializable
-data object ImportExport : NavRoute
 
 @Serializable
 data object Notifications : NavRoute
 
 @Serializable
 data object Settings : NavRoute
-
-@Serializable
-data object AiChat : NavRoute
-
-@Serializable
-data object AiDeveloper : NavRoute
 
 @Serializable
 data object About : NavRoute
@@ -77,3 +62,6 @@ data class TransactionDetail(val id: Long) : NavRoute
 
 @Serializable
 data class EditTransaction(val id: Long) : NavRoute
+
+@Serializable
+data class EditRecurring(val id: Long) : NavRoute

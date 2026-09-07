@@ -1,26 +1,21 @@
 package sayan.apps.rupeeflow.core.database.converters
 
 import androidx.room.TypeConverter
-import sayan.apps.rupeeflow.core.ai.session.Role
 import sayan.apps.rupeeflow.core.database.entity.*
+import sayan.apps.rupeeflow.domain.model.PaymentMethodType
 import sayan.apps.rupeeflow.domain.model.TransactionType
 import sayan.apps.rupeeflow.domain.model.UPIApp
 
 class DatabaseConverters {
-    @TypeConverter
-    fun fromRole(value: Role): String = value.name
-    @TypeConverter
-    fun toRole(value: String): Role = Role.valueOf(value)
-
     @TypeConverter
     fun fromTransactionType(value: TransactionType): String = value.name
     @TypeConverter
     fun toTransactionType(value: String): TransactionType = TransactionType.valueOf(value)
 
     @TypeConverter
-    fun fromAccountCategory(value: AccountCategory): String = value.name
+    fun fromAccountCategory(value: AccountCategory?): String? = value?.name
     @TypeConverter
-    fun toAccountCategory(value: String): AccountCategory = AccountCategory.valueOf(value)
+    fun toAccountCategory(value: String?): AccountCategory? = value?.let { AccountCategory.valueOf(it) }
 
     @TypeConverter
     fun fromAccountSubType(value: AccountSubType): String = value.name
@@ -43,7 +38,17 @@ class DatabaseConverters {
     fun toRecurrenceFrequency(value: String): RecurrenceFrequency = RecurrenceFrequency.valueOf(value)
 
     @TypeConverter
+    fun fromOccurrenceStatus(value: OccurrenceStatus): String = value.name
+    @TypeConverter
+    fun toOccurrenceStatus(value: String): OccurrenceStatus = OccurrenceStatus.valueOf(value)
+
+    @TypeConverter
     fun fromUPIApp(value: UPIApp?): String? = value?.name
     @TypeConverter
     fun toUPIApp(value: String?): UPIApp? = value?.let { UPIApp.valueOf(it) }
+
+    @TypeConverter
+    fun fromPaymentMethodType(value: PaymentMethodType?): String? = value?.name
+    @TypeConverter
+    fun toPaymentMethodType(value: String?): PaymentMethodType? = value?.let { PaymentMethodType.valueOf(it) }
 }

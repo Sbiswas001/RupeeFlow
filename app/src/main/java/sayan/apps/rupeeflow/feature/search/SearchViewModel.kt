@@ -14,7 +14,7 @@ import sayan.apps.rupeeflow.domain.repository.SearchRepository
 import javax.inject.Inject
 
 enum class SearchCategory {
-    ALL, TRANSACTIONS, ACCOUNTS, RECURRING, CATEGORIES, MERCHANTS, PLANNING, BUDGETS, GOALS
+    ALL, TRANSACTIONS, ACCOUNTS, RECURRING, CATEGORIES, PLANNING, BUDGETS, GOALS
 }
 
 data class SearchUiState(
@@ -96,7 +96,6 @@ class SearchViewModel @Inject constructor(
                         SearchCategory.ACCOUNTS -> results.filterIsInstance<SearchResult.AccountResult>()
                         SearchCategory.RECURRING -> results.filterIsInstance<SearchResult.RecurringResult>()
                         SearchCategory.CATEGORIES -> results.filterIsInstance<SearchResult.CategoryResult>()
-                        SearchCategory.MERCHANTS -> results.filterIsInstance<SearchResult.MerchantResult>()
                         SearchCategory.PLANNING -> results.filter { it is SearchResult.BudgetResult || it is SearchResult.GoalResult }
                         SearchCategory.BUDGETS -> results.filterIsInstance<SearchResult.BudgetResult>()
                         SearchCategory.GOALS -> results.filterIsInstance<SearchResult.GoalResult>()

@@ -10,5 +10,8 @@ data class GoalEntity(
     val title: String,
     val targetAmount: Double,
     val currentAmount: Double = 0.0,
-    val targetDate: Long? = null
+    val targetDate: Long? = null,
+    val notified50Percent: Boolean = false,
+    val notified90Percent: Boolean = false,
+    val notified100Percent: Boolean = false
 )

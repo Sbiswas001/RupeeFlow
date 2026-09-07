@@ -16,5 +16,6 @@ enum class UPIApp {
 data class UPIMetadata(
     val transactionId: String? = null,
     val app: UPIApp? = null,
-    val linkedBank: String? = null
+    val linkedBank: String? = null,
+    val upiAppNameSnapshot: String? = null
 )

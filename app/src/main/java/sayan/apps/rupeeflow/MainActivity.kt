@@ -1,18 +1,20 @@
 package sayan.apps.rupeeflow
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,45 +28,106 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.fragment.app.FragmentActivity
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavBackStack
-import kotlinx.coroutines.launch
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.google.android.gms.auth.api.identity.Identity
+import com.google.api.services.drive.DriveScopes
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import sayan.apps.rupeeflow.core.designsystem.theme.RupeeFlowTheme
 import sayan.apps.rupeeflow.core.navigation.*
+import sayan.apps.rupeeflow.core.security.AppLockManager
+import sayan.apps.rupeeflow.core.security.AppLockState
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
+import sayan.apps.rupeeflow.domain.repository.UserPreferencesRepository
 import sayan.apps.rupeeflow.feature.about.AboutScreen
 import sayan.apps.rupeeflow.feature.accounts.AccountScreen
 import sayan.apps.rupeeflow.feature.accounts.NetWorthScreen
+import sayan.apps.rupeeflow.feature.analytics.AllCategoryBreakdownScreen
 import sayan.apps.rupeeflow.feature.categories.CategoriesScreen
 import sayan.apps.rupeeflow.feature.categories.CategoryDetailScreen
 import sayan.apps.rupeeflow.feature.dashboard.DashboardScreen
 import sayan.apps.rupeeflow.feature.insights.InsightsScreen
 import sayan.apps.rupeeflow.feature.recurring.AddRecurringScreen
 import sayan.apps.rupeeflow.feature.recurring.RecurringDetailScreen
-import sayan.apps.rupeeflow.feature.recurring.RecurringScreen
 import sayan.apps.rupeeflow.feature.search.SearchScreen
+import sayan.apps.rupeeflow.feature.security.AppLockScreen
+import sayan.apps.rupeeflow.feature.settings.BackupRestoreScreen
+import sayan.apps.rupeeflow.feature.settings.NotificationsScreen
 import sayan.apps.rupeeflow.feature.settings.SettingsScreen
 import sayan.apps.rupeeflow.feature.settings.SettingsViewModel
+import sayan.apps.rupeeflow.feature.settings.UserPreferencesUiState
+import sayan.apps.rupeeflow.feature.transactions.ActivityPagerScreen
 import sayan.apps.rupeeflow.feature.transactions.AddTransactionScreen
 import sayan.apps.rupeeflow.feature.transactions.TransactionDetailScreen
-import sayan.apps.rupeeflow.feature.transactions.TransactionsScreen
+import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
+
+    @Inject
+    lateinit var appLockManager: AppLockManager
+
+    @Inject
+    lateinit var userPreferencesRepository: UserPreferencesRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        lifecycle.addObserver(LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> appLockManager.onAppForegrounded()
+                Lifecycle.Event.ON_PAUSE -> appLockManager.onAppPaused()
+                Lifecycle.Event.ON_STOP -> appLockManager.onAppBackgrounded()
+                else -> {}
+            }
+        })
+
         enableEdgeToEdge()
         setContent {
-            RupeeFlowTheme {
-                MainApp()
+            val lockState by appLockManager.lockState.collectAsStateWithLifecycle()
+            val preferences by userPreferencesRepository.userPreferences.collectAsStateWithLifecycle(initialValue = null)
+            
+            // Apply FLAG_SECURE if locked or screenshot protection is enabled
+            LaunchedEffect(lockState, preferences?.screenshotProtection) {
+                if (lockState != AppLockState.UNLOCKED || preferences?.screenshotProtection == true) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
+
+            RupeeFlowTheme(
+                amoledBlack = preferences?.amoledBlack ?: false,
+                dynamicColor = preferences?.dynamicColor ?: false
+            ) {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (lockState) {
+                            AppLockState.UNLOCKED -> {
+                                MainApp()
+                            }
+                            AppLockState.INITIALIZING -> {
+                                // Show neutral black background (handled by Surface)
+                            }
+                            AppLockState.LOCKED, AppLockState.AUTHENTICATING, AppLockState.COOLDOWN -> {
+                                AppLockScreen()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -74,87 +137,266 @@ class MainActivity : ComponentActivity() {
 fun MainApp(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val preferences by viewModel.userPreferences.collectAsState()
-
-    // Permission for Android 13+ Notifications
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-            onResult = { _ -> }
-        )
-        LaunchedEffect(Unit) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
-    val navigationStack = rememberNavBackStack(Dashboard)
-    val currentRoute = navigationStack.lastOrNull() ?: Dashboard
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var isRestoreLoading by remember { mutableStateOf(false) }
+    var restoreMessage by remember { mutableStateOf<String?>(null) }
+    var isRestoreSuccess by remember { mutableStateOf(false) }
 
-    // We show the global navigation top bar and bottom bar on most screens
-    val showNavigation = currentRoute !is Search
+    val isGoogleSignedIn by viewModel.isGoogleSignedIn.collectAsStateWithLifecycle()
 
-    val navigateTo = { route: NavRoute ->
-        if (currentRoute::class != route::class) {
-            // Keep history for all screens to allow back navigation between tabs/sidebar items
-            navigationStack.add(route)
+    // To store what action to take after authorization
+    var pendingDriveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val authorizationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult(),
+        onResult = { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                scope.launch {
+                    try {
+                        val authResult = Identity.getAuthorizationClient(context)
+                            .getAuthorizationResultFromIntent(result.data)
+                        val token = authResult.accessToken
+                        if (token != null) {
+                            pendingDriveAction?.invoke()
+                        } else {
+                            restoreMessage = "Failed to get access token"
+                        }
+                    } catch (e: Exception) {
+                        restoreMessage = "Authorization failed: ${e.message}"
+                    } finally {
+                        pendingDriveAction = null
+                    }
+                }
+            } else {
+                pendingDriveAction = null
+            }
         }
+    )
+
+    fun performWithDriveAccess(action: (String) -> Unit) {
+        val requestedScopes = listOf(DriveScopes.DRIVE_APPDATA)
+        val authClient = Identity.getAuthorizationClient(context)
+        val authRequest = viewModel.authorizationHelper.getAuthorizationRequest(requestedScopes)
+        
+        authClient.authorize(authRequest)
+            .addOnSuccessListener { result ->
+                if (result.hasResolution()) {
+                    pendingDriveAction = {
+                        performWithDriveAccess(action)
+                    }
+                    val intentSenderRequest = IntentSenderRequest.Builder(result.pendingIntent!!.intentSender).build()
+                    authorizationLauncher.launch(intentSenderRequest)
+                } else {
+                    val token = result.accessToken
+                    if (token != null) {
+                        viewModel.fetchDriveBackupInfo(token)
+                        action(token)
+                    } else {
+                        restoreMessage = "Failed to get access token"
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                restoreMessage = "Drive access failed: ${e.message}"
+            }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = showNavigation,
-        drawerContent = {
-            RupeeFlowDrawerContent(
-                currentRoute = currentRoute,
-                onNavigate = { route ->
-                    scope.launch { drawerState.close() }
-                    navigateTo(route)
-                }
-            )
+    when (val state = uiState) {
+        UserPreferencesUiState.Loading -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         }
-    ) {
-        CompositionLocalProvider(LocalUserPreferences provides preferences) {
-            Scaffold(
-                topBar = {
-                    AnimatedVisibility(
-                        visible = showNavigation,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        RupeeFlowTopAppBar(
-                            currentRoute = currentRoute,
-                            onMenuClick = { scope.launch { drawerState.open() } },
-                            onNavigate = navigateTo,
-                            navigationStack = navigationStack
-                        )
-                    }
-                },
-                bottomBar = {
-                    AnimatedVisibility(
-                        visible = showNavigation,
-                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
-                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
-                    ) {
-                        OneUIBottomNavigation(
-                            currentRoute = currentRoute,
-                            onNavigate = navigateTo
-                        )
-                    }
-                },
-                containerColor = Color.Black
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .fillMaxSize()
-                ) {
-                    AppContent(
-                        navigationStack = navigationStack,
-                        drawerState = drawerState,
-                        scope = scope
+        is UserPreferencesUiState.Success -> {
+            val preferences = state.preferences
+            
+            if (preferences.isFirstRun || isRestoreSuccess) {
+                AlertDialog(
+                    onDismissRequest = { /* Don't dismiss by tapping outside */ },
+                    title = { Text(if (isRestoreSuccess) "Restore Complete" else "Welcome to RupeeFlow") },
+                    text = {
+                        Column {
+                            if (!isRestoreSuccess) {
+                                Text("Would you like to restore your data from Google Drive or start fresh?")
+                            }
+                            if (restoreMessage != null) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(restoreMessage!!, color = if (isRestoreSuccess) Color(0xFF10B981) else Color.Red)
+                            }
+                            if (isRestoreLoading) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (isRestoreSuccess) {
+                            Button(
+                                onClick = { 
+                                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                                    val mainIntent = Intent.makeRestartActivityTask(intent?.component)
+                                    context.startActivity(mainIntent)
+                                    Runtime.getRuntime().exit(0)
+                                }
+                            ) {
+                                Text("Restart App")
+                            }
+                        } else {
+                            Button(
+                                onClick = { 
+                                    scope.launch {
+                                        isRestoreLoading = true
+                                        if (isGoogleSignedIn) {
+                                            performWithDriveAccess { token ->
+                                                viewModel.restoreFromGoogleDrive(
+                                                    accessToken = token,
+                                                    onSuccess = {
+                                                        isRestoreLoading = false
+                                                        isRestoreSuccess = true
+                                                        restoreMessage = "Restore successful. The app needs to restart to apply changes."
+                                                        viewModel.updateFirstRun(false)
+                                                    },
+                                                    onError = { message ->
+                                                        isRestoreLoading = false
+                                                        restoreMessage = "Restore failed: $message"
+                                                    }
+                                                )
+                                            }
+                                        } else {
+                                            val credential = viewModel.authHelper.signInWithGoogle(context)
+                                            if (credential != null) {
+                                                viewModel.setGoogleSignedIn(true, credential.id)
+                                                performWithDriveAccess { token ->
+                                                    viewModel.restoreFromGoogleDrive(
+                                                        accessToken = token,
+                                                        onSuccess = {
+                                                            isRestoreLoading = false
+                                                            isRestoreSuccess = true
+                                                            restoreMessage = "Restore successful. The app needs to restart to apply changes."
+                                                            viewModel.updateFirstRun(false)
+                                                        },
+                                                        onError = { message ->
+                                                            isRestoreLoading = false
+                                                            restoreMessage = "Restore failed: $message"
+                                                        }
+                                                    )
+                                                }
+                                            } else {
+                                                isRestoreLoading = false
+                                                restoreMessage = "Sign in failed"
+                                            }
+                                        }
+                                    }
+                                },
+                                enabled = !isRestoreLoading
+                            ) {
+                                Text("Restore from Drive")
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        if (!isRestoreSuccess) {
+                            TextButton(
+                                onClick = { viewModel.updateFirstRun(false) },
+                                enabled = !isRestoreLoading
+                            ) {
+                                Text("Start Fresh")
+                            }
+                        }
+                    },
+                    containerColor = Color(0xFF111827),
+                    titleContentColor = Color.White,
+                    textContentColor = Color.Gray
+                )
+            }
+
+            // Permission for Android 13+ Notifications
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission(),
+                    onResult = { _ -> }
+                )
+                LaunchedEffect(Unit) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+
+            val navigationStack = rememberNavBackStack(Dashboard)
+            val currentRoute = navigationStack.lastOrNull() ?: Dashboard
+            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+            // Drawer items that use the global top bar (Hamburger menu)
+            val showTopBar = currentRoute is Dashboard || 
+                             currentRoute is Activity ||
+                             currentRoute is Accounts || 
+                             currentRoute is Insights || 
+                             currentRoute is Categories
+            val showBottomBar = currentRoute !is Search
+
+            val navigateTo = { route: NavRoute ->
+                if (currentRoute::class != route::class) {
+                    // Keep history for all screens to allow back navigation between tabs/sidebar items
+                    navigationStack.add(route)
+                }
+            }
+
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                gesturesEnabled = showBottomBar,
+                drawerContent = {
+                    RupeeFlowDrawerContent(
+                        currentRoute = currentRoute,
+                        onNavigate = { route ->
+                            scope.launch { drawerState.close() }
+                            navigateTo(route)
+                        }
                     )
+                }
+            ) {
+                CompositionLocalProvider(LocalUserPreferences provides preferences) {
+                    Scaffold(
+                        topBar = {
+                            AnimatedVisibility(
+                                visible = showTopBar,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                RupeeFlowTopAppBar(
+                                    currentRoute = currentRoute,
+                                    onMenuClick = { scope.launch { drawerState.open() } },
+                                    onNavigate = navigateTo,
+                                    navigationStack = navigationStack
+                                )
+                            }
+                        },
+                        bottomBar = {
+                            AnimatedVisibility(
+                                visible = showBottomBar,
+                                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                            ) {
+                                OneUIBottomNavigation(
+                                    currentRoute = currentRoute,
+                                    onNavigate = navigateTo
+                                )
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.background
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .padding(innerPadding)
+                                .fillMaxSize()
+                        ) {
+                            AppContent(
+                                navigationStack = navigationStack,
+                                drawerState = drawerState,
+                                scope = scope
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -170,27 +412,19 @@ fun RupeeFlowTopAppBar(
     navigationStack: NavBackStack<NavKey>
 ) {
     val title = when (currentRoute) {
-        is Dashboard -> "Dashboard"
-        is Activity -> "Activity"
-        is Accounts -> "Portfolio"
-        is Insights -> "Insights"
-        is Recurring -> "Recurring"
+        is Dashboard, is Activity, is Accounts, is Insights -> "RupeeFlow"
         is NetWorth -> "Net Worth"
         is Categories -> "Categories"
-        is Merchants -> "Merchants"
-        is Tags -> "Tags"
-        is Archived -> "Archived"
         is BackupRestore -> "Backup & Restore"
-        is ImportExport -> "Import & Export"
         is Notifications -> "Notifications"
         is Settings -> "Settings"
-        is AiChat -> "RupeeFlow Assistant"
         is About -> "About"
         is AddTransaction -> "Add Transaction"
         is EditTransaction -> "Edit Transaction"
         is TransactionDetail -> "Details"
         is RecurringDetail -> "Recurring Details"
         is AddRecurring -> "Add Recurring"
+        is EditRecurring -> "Edit Recurring"
         else -> "RupeeFlow"
     }
 
@@ -214,7 +448,7 @@ fun RupeeFlowTopAppBar(
                     }
                 }
                 is RecurringDetail -> {
-                    IconButton(onClick = { /* navigate to edit if exists */ }) {
+                    IconButton(onClick = { navigationStack.add(EditRecurring(currentRoute.id)) }) {
                         Icon(Icons.Rounded.Edit, contentDescription = "Edit")
                     }
                 }
@@ -229,10 +463,10 @@ fun RupeeFlowTopAppBar(
             }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = Color.Black,
-            titleContentColor = Color.White,
-            navigationIconContentColor = Color.White,
-            actionIconContentColor = Color.White
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+            actionIconContentColor = MaterialTheme.colorScheme.onBackground
         )
     )
 }
@@ -277,9 +511,9 @@ fun RupeeFlowDrawerContent(
             )
 
             NavigationDrawerItem(
-                label = { Text("Transactions") },
+                label = { Text("Activity") },
                 selected = currentRoute is Activity,
-                onClick = { onNavigate(Activity) },
+                onClick = { onNavigate(Activity()) },
                 icon = { Icon(Icons.AutoMirrored.Rounded.ReceiptLong, contentDescription = null) },
                 modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                 colors = NavigationDrawerItemDefaults.colors(
@@ -294,38 +528,8 @@ fun RupeeFlowDrawerContent(
             NavigationDrawerItem(
                 label = { Text("Insights") },
                 selected = currentRoute is Insights,
-                onClick = { onNavigate(Insights) },
+                onClick = { onNavigate(Insights()) },
                 icon = { Icon(Icons.Rounded.AutoGraph, contentDescription = null) },
-                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFF7C3AED),
-                    selectedTextColor = Color.White,
-                    selectedIconColor = Color.White,
-                    unselectedTextColor = Color(0xFF9CA3AF),
-                    unselectedIconColor = Color(0xFF9CA3AF)
-                )
-            )
-
-            NavigationDrawerItem(
-                label = { Text("RupeeFlow AI") },
-                selected = currentRoute is AiChat,
-                onClick = { onNavigate(AiChat) },
-                icon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
-                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = Color(0xFF7C3AED),
-                    selectedTextColor = Color.White,
-                    selectedIconColor = Color.White,
-                    unselectedTextColor = Color(0xFF9CA3AF),
-                    unselectedIconColor = Color(0xFF9CA3AF)
-                )
-            )
-
-            NavigationDrawerItem(
-                label = { Text("Recurring") },
-                selected = currentRoute is Recurring,
-                onClick = { onNavigate(Recurring) },
-                icon = { Icon(Icons.Rounded.CalendarToday, contentDescription = null) },
                 modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                 colors = NavigationDrawerItemDefaults.colors(
                     selectedContainerColor = Color(0xFF7C3AED),
@@ -354,14 +558,10 @@ fun RupeeFlowDrawerContent(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp, horizontal = 28.dp), color = Color(0xFF1F2937))
 
             DrawerSecondaryItem("Categories", Icons.Rounded.Category, currentRoute is Categories) { onNavigate(Categories) }
-            DrawerSecondaryItem("Merchants", Icons.Rounded.Store, currentRoute is Merchants) { onNavigate(Merchants) }
-            DrawerSecondaryItem("Tags", Icons.Rounded.Label, currentRoute is Tags) { onNavigate(Tags) }
-            DrawerSecondaryItem("Archived", Icons.Rounded.Archive, currentRoute is Archived) { onNavigate(Archived) }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp, horizontal = 28.dp), color = Color(0xFF1F2937))
 
             DrawerSecondaryItem("Backup & Restore", Icons.Rounded.Backup, currentRoute is BackupRestore) { onNavigate(BackupRestore) }
-            DrawerSecondaryItem("Import & Export", Icons.Rounded.ImportExport, currentRoute is ImportExport) { onNavigate(ImportExport) }
             DrawerSecondaryItem("Notifications", Icons.Rounded.Notifications, currentRoute is Notifications) { onNavigate(Notifications) }
             DrawerSecondaryItem("Settings", Icons.Rounded.Settings, currentRoute is Settings) { onNavigate(Settings) }
             DrawerSecondaryItem("About", Icons.Rounded.Info, currentRoute is About) { onNavigate(About) }
@@ -401,19 +601,18 @@ fun OneUIBottomNavigation(
 ) {
     val items = listOf(
         NavigationItem("Dashboard", Icons.Rounded.Dashboard, Dashboard),
-        NavigationItem("Activity", Icons.AutoMirrored.Rounded.ReceiptLong, Activity),
-        NavigationItem("Insights", Icons.Rounded.AutoGraph, Insights),
-        NavigationItem("Recurring", Icons.Rounded.CalendarToday, Recurring),
+        NavigationItem("Activity", Icons.AutoMirrored.Rounded.ReceiptLong, Activity()),
+        NavigationItem("Insights", Icons.Rounded.AutoGraph, Insights()),
         NavigationItem("Accounts", Icons.Rounded.AccountBalance, Accounts)
     )
 
     Surface(
-        color = Color(0xFF000000),
+        color = MaterialTheme.colorScheme.background,
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .height(80.dp),
-        border = BorderStroke(0.5.dp, Color(0xFF1F2937))
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -428,7 +627,7 @@ fun OneUIBottomNavigation(
                 Column(
                     modifier = Modifier
                         .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onNavigate(item.route) }
                         .padding(vertical = 4.dp),
@@ -488,7 +687,7 @@ data class NavigationItem(
 fun AppContent(
     navigationStack: NavBackStack<NavKey>,
     drawerState: DrawerState,
-    scope: kotlinx.coroutines.CoroutineScope
+    scope: CoroutineScope
 ) {
     val navigateBack = {
         if (navigationStack.size > 1) {
@@ -508,13 +707,21 @@ fun AppContent(
             entry<Dashboard> {
                 DashboardScreen(
                     onNavigateToAdd = { navigationStack.add(AddTransaction) },
-                    onNavigateToDetail = { id -> navigationStack.add(TransactionDetail(id)) }
+                    onNavigateToDetail = { id -> navigationStack.add(TransactionDetail(id)) },
+                    onNavigateToUpcoming = { navigationStack.add(sayan.apps.rupeeflow.core.navigation.Activity(initialTab = 1)) },
+                    onNavigateToEditRecurring = { id -> navigationStack.add(EditRecurring(id)) },
+                    onNavigateToAccountDetails = { _ -> navigationStack.add(Accounts) },
+                    onNavigateToInsightsTab = { tab -> navigationStack.add(Insights(initialTab = tab)) }
                 )
             }
             entry<Activity> {
-                TransactionsScreen(
-                    onNavigateToAdd = { navigationStack.add(AddTransaction) },
-                    onNavigateToDetail = { id -> navigationStack.add(TransactionDetail(id)) }
+                ActivityPagerScreen(
+                    onMenuClick = { scope.launch { drawerState.open() } },
+                    initialTab = it.initialTab,
+                    onNavigateToAddTransaction = { navigationStack.add(AddTransaction) },
+                    onNavigateToAddRecurring = { navigationStack.add(AddRecurring) },
+                    onNavigateToTransactionDetail = { id -> navigationStack.add(TransactionDetail(id)) },
+                    onNavigateToRecurringDetail = { id -> navigationStack.add(RecurringDetail(id)) }
                 )
             }
             entry<AddTransaction> {
@@ -545,26 +752,37 @@ fun AppContent(
                     onNavigateBack = navigateBack
                 )
             }
-            entry<Insights> {
+            entry<Insights> { key ->
                 InsightsScreen(
-                    onNavigateToAddRecurring = { navigationStack.add(AddRecurring) }
+                    initialTab = key.initialTab,
+                    onNavigateToAddRecurring = { navigationStack.add(AddRecurring) },
+                    onNavigateToViewAll = { navigationStack.add(AllCategoryBreakdown) },
+                    onNavigateToCategoryDetail = { id -> navigationStack.add(CategoryDetail(id)) }
                 )
             }
-            entry<Recurring> {
-                RecurringScreen(
-                    onNavigateToAdd = { navigationStack.add(AddRecurring) },
-                    onNavigateToDetail = { id -> navigationStack.add(RecurringDetail(id)) }
+            entry<AllCategoryBreakdown> {
+                AllCategoryBreakdownScreen(
+                    onNavigateBack = navigateBack,
+                    onNavigateToCategoryDetail = { id -> navigationStack.add(CategoryDetail(id)) }
                 )
             }
+            // Recurring is now part of Activity
             entry<AddRecurring> {
                 AddRecurringScreen(
+                    onNavigateBack = navigateBack
+                )
+            }
+            entry<EditRecurring> {
+                AddRecurringScreen(
+                    itemId = it.id,
                     onNavigateBack = navigateBack
                 )
             }
             entry<RecurringDetail> {
                 RecurringDetailScreen(
                     itemId = it.id,
-                    onNavigateBack = navigateBack
+                    onNavigateBack = navigateBack,
+                    onNavigateToEdit = { id -> navigationStack.add(EditRecurring(id)) }
                 )
             }
             entry<Search> {
@@ -585,25 +803,20 @@ fun AppContent(
                     onNavigateBack = navigateBack
                 )
             }
-            entry<Merchants> { PlaceholderScreen("Merchants") }
-            entry<Tags> { PlaceholderScreen("Tags") }
-            entry<Archived> { PlaceholderScreen("Archived") }
-            entry<BackupRestore> { PlaceholderScreen("Backup & Restore") }
-            entry<ImportExport> { PlaceholderScreen("Import & Export") }
-            entry<Notifications> { PlaceholderScreen("Notifications") }
-            entry<Settings> {
-                SettingsScreen(
+            entry<BackupRestore> {
+                BackupRestoreScreen(
                     onNavigateBack = navigateBack
                 )
             }
-            entry<AiChat> {
-                sayan.apps.rupeeflow.feature.ai.AiChatScreen(
-                    onBackClick = navigateBack
+            entry<Notifications> {
+                NotificationsScreen(
+                    onNavigateBack = navigateBack
                 )
             }
-            entry<AiDeveloper> {
-                sayan.apps.rupeeflow.feature.ai.AiDeveloperScreen(
-                    onBackClick = navigateBack
+            entry<Settings> {
+                SettingsScreen(
+                    onNavigateBack = navigateBack,
+                    onNavigateToBackupRestore = { navigationStack.add(BackupRestore) }
                 )
             }
             entry<About> {

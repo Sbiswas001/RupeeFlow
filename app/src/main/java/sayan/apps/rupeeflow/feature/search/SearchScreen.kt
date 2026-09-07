@@ -42,7 +42,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import sayan.apps.rupeeflow.domain.model.*
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
 import sayan.apps.rupeeflow.core.util.LocalUserPreferences
@@ -452,7 +452,6 @@ fun SearchResultsContent(
                 groupResults(grouped, "AccountResult", "Accounts", query, onNavigateToTransactionDetail, accounts)
                 groupResults(grouped, "RecurringResult", "Recurring", query, onNavigateToTransactionDetail, accounts)
                 groupResults(grouped, "CategoryResult", "Categories", query, onNavigateToTransactionDetail, accounts)
-                groupResults(grouped, "MerchantResult", "Merchants", query, onNavigateToTransactionDetail, accounts)
                 groupResults(grouped, "BudgetResult", "Budgets", query, onNavigateToTransactionDetail, accounts)
                 groupResults(grouped, "GoalResult", "Goals", query, onNavigateToTransactionDetail, accounts)
             }
@@ -533,17 +532,6 @@ fun SearchResultItem(
                 icon = Icons.Rounded.Category,
                 iconColor = Color(result.category.colorHex.removePrefix("#").toLong(16) or 0xFF000000),
                 bgColor = Color(0xFF202020),
-                query = query,
-                onClick = onClick
-            )
-        }
-        is SearchResult.MerchantResult -> {
-            GenericResultItem(
-                title = result.name,
-                subtitle = "Merchant",
-                icon = Icons.Rounded.Store,
-                iconColor = Color(0xFF10B981),
-                bgColor = Color(0xFF151B1F),
                 query = query,
                 onClick = onClick
             )
@@ -635,10 +623,19 @@ fun RichTransactionItem(
                 Text(date, style = MaterialTheme.typography.labelSmall, color = Color.DarkGray)
             }
             
+            val isTransfer = transaction.type == TransactionType.TRANSFER
             Text(
-                text = (if (transaction.isIncome) "+ " else "- ") + CurrencyFormatter.format(transaction.amount, preferences),
+                text = when {
+                    isTransfer -> CurrencyFormatter.format(transaction.amount, preferences)
+                    transaction.isIncome -> "+ " + CurrencyFormatter.format(transaction.amount, preferences)
+                    else -> "- " + CurrencyFormatter.format(transaction.amount, preferences)
+                },
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (transaction.isIncome) Color(0xFF10B981) else Color(0xFFEF4444),
+                color = when {
+                    isTransfer -> Color.White
+                    transaction.isIncome -> Color(0xFF10B981)
+                    else -> Color(0xFFEF4444)
+                },
                 fontWeight = FontWeight.Bold
             )
         }

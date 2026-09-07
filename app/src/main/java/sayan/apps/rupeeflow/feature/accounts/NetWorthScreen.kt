@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import sayan.apps.rupeeflow.core.designsystem.components.LineChart
 import sayan.apps.rupeeflow.core.designsystem.components.LineChartPoint
 import sayan.apps.rupeeflow.core.util.CurrencyFormatter
@@ -30,12 +30,34 @@ fun NetWorthScreen(
 ) {
     val preferences = LocalUserPreferences.current
     val accounts by viewModel.accounts.collectAsState()
+    val history by viewModel.netWorthHistory.collectAsState()
     
     val assets = accounts.filter { it.category != "LIABILITIES" }.sumOf { it.balance }
     val liabilities = accounts.filter { it.category == "LIABILITIES" }.sumOf { it.balance }
     val netWorth = assets - liabilities
 
+    val chartPoints = remember(history) {
+        history.mapIndexed { index, pair ->
+            LineChartPoint(index.toFloat(), pair.second)
+        }
+    }
+
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Portfolio Growth") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Black,
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
+            )
+        },
         containerColor = Color.Black
     ) { innerPadding ->
         LazyColumn(
@@ -58,24 +80,21 @@ fun NetWorthScreen(
                 )
             }
 
-            item {
-                Surface(
-                    color = Color(0xFF181818),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Text("Growth", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                        Spacer(modifier = Modifier.height(24.dp))
-                        LineChart(
-                            points = listOf(
-                                LineChartPoint(1f, netWorth * 0.8),
-                                LineChartPoint(2f, netWorth * 0.85),
-                                LineChartPoint(3f, netWorth * 0.9),
-                                LineChartPoint(4f, netWorth)
-                            ),
-                            modifier = Modifier.height(200.dp),
-                            lineColor = Color(0xFF10B981)
-                        )
+            if (chartPoints.isNotEmpty()) {
+                item {
+                    Surface(
+                        color = Color(0xFF181818),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp)) {
+                            Text("Growth", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            LineChart(
+                                points = chartPoints,
+                                modifier = Modifier.height(200.dp),
+                                lineColor = Color(0xFF10B981)
+                            )
+                        }
                     }
                 }
             }

@@ -13,7 +13,21 @@ data class Transaction(
     val categoryIcon: String? = null,
     val categoryColor: String? = null,
     val isIncome: Boolean,
-    val accountId: Long = 0,
+    val type: TransactionType = if (isIncome) TransactionType.INCOME else TransactionType.EXPENSE,
+    val accountId: Long? = null,
     val note: String? = null,
-    val upiMetadata: UPIMetadata? = null
+    val upiMetadata: UPIMetadata? = null,
+    val previousBalance: Double? = null,
+    val actualBalance: Double? = null,
+    val reconciliationReason: String? = null,
+    val accountNameSnapshot: String? = null,
+    val accountCategorySnapshot: String? = null,
+    val transferId: String? = null,
+    val transferAccountId: Long? = null,
+    val transferAccountNameSnapshot: String? = null,
+    val isIncoming: Boolean = false,
+    val paymentMethodType: PaymentMethodType? = null,
+    val debitCardId: Long? = null,
+    val debitCardNameSnapshot: String? = null,
+    val debitCardLast4Snapshot: String? = null
 )

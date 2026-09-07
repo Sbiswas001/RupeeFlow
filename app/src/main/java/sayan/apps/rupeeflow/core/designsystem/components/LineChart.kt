@@ -1,5 +1,6 @@
 package sayan.apps.rupeeflow.core.designsystem.components
 
+import android.graphics.PathMeasure
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -9,8 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 data class LineChartPoint(
@@ -22,76 +25,78 @@ data class LineChartPoint(
 fun LineChart(
     points: List<LineChartPoint>,
     modifier: Modifier = Modifier,
-    lineColor: Color = Color(0xFF10B981)
+    lineColor: Color? = null,
+    strokeWidth: Dp = 2.dp,
+    increaseColor: Color = Color(0xFF1D4ED8),
+    decreaseColor: Color = Color(0xFF991B1B),
+    neutralColor: Color = Color.White.copy(alpha = 0.8f)
 ) {
-    if (points.isEmpty()) return
+    if (points.size < 2) return
 
-    val animatedProgress = remember { Animatable(0f) }
+    val sortedPoints = remember(points) { points.sortedBy { it.x } }
+    val animatedProgress = remember(sortedPoints) { Animatable(0f) }
 
-    LaunchedEffect(points) {
+    LaunchedEffect(sortedPoints) {
         animatedProgress.snapTo(0f)
         animatedProgress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 1000)
+            animationSpec = tween(durationMillis = 800)
         )
     }
 
-    Canvas(modifier = modifier.fillMaxWidth().height(200.dp)) {
+    val startVal = sortedPoints.first().y
+    val endVal = sortedPoints.last().y
+    val overallTrendColor = lineColor ?: when {
+        endVal > startVal -> increaseColor
+        endVal < startVal -> decreaseColor
+        else -> neutralColor
+    }
+
+    Canvas(modifier = modifier.fillMaxWidth().height(50.dp)) {
         val width = size.width
         val height = size.height
-        
-        val maxAmount = points.maxOf { it.y }.toFloat().coerceAtLeast(1f)
-        val minAmount = 0f // Start from zero for better context
-        
-        val path = Path()
-        val fillPath = Path()
-        
-        points.forEachIndexed { index, point ->
-            val xPos = (index.toFloat() / (points.size - 1).coerceAtLeast(1)) * width
-            val yPos = height - ((point.y.toFloat() - minAmount) / (maxAmount - minAmount)) * height
-            
-            if (index == 0) {
-                path.moveTo(xPos, yPos)
-                fillPath.moveTo(xPos, yPos)
+
+        val yValues = sortedPoints.map { it.y.toFloat() }
+        val rawMin = yValues.minOrNull() ?: 0f
+        val rawMax = yValues.maxOrNull() ?: 0f
+
+        val range = rawMax - rawMin
+        val padding = if (range == 0f) 1f else range * 0.1f
+        val minY = rawMin - padding
+        val maxY = rawMax + padding
+        val span = maxY - minY
+
+        val coords = sortedPoints.mapIndexed { index, point ->
+            val xPos = (index.toFloat() / (sortedPoints.size - 1)).coerceAtLeast(0f) * width
+            val yPos = if (span == 0f) {
+                height / 2f
             } else {
-                path.lineTo(xPos, yPos)
-                fillPath.lineTo(xPos, yPos)
+                height - ((point.y.toFloat() - minY) / span) * height
+            }
+            Offset(xPos, yPos)
+        }
+
+        val path = Path()
+        if (coords.isNotEmpty()) {
+            path.moveTo(coords[0].x, coords[0].y)
+            for (i in 0 until coords.size - 1) {
+                val p1 = coords[i]
+                val p2 = coords[i + 1]
+                val controlPoint1 = Offset(p1.x + (p2.x - p1.x) / 2f, p1.y)
+                val controlPoint2 = Offset(p1.x + (p2.x - p1.x) / 2f, p2.y)
+                path.cubicTo(controlPoint1.x, controlPoint1.y, controlPoint2.x, controlPoint2.y, p2.x, p2.y)
             }
         }
 
-        // Apply progress for animation
-        val pathMeasure = android.graphics.PathMeasure(path.asAndroidPath(), false)
+        val pathMeasure = PathMeasure(path.asAndroidPath(), false)
         val length = pathMeasure.length
-        val androidAnimatedPath = android.graphics.Path()
-        pathMeasure.getSegment(0f, length * animatedProgress.value, androidAnimatedPath, true)
-        
-        drawPath(
-            path = androidAnimatedPath.asComposePath(),
-            color = lineColor,
-            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-
-        // Gradient under the line (clip it to animated path length)
-        val animatedFillPath = android.graphics.Path()
-        pathMeasure.getSegment(0f, length * animatedProgress.value, animatedFillPath, true)
-        animatedFillPath.lineTo((points.size - 1).toFloat() / (points.size - 1).coerceAtLeast(1) * width * animatedProgress.value, height) // This is wrong
-        
-        // Let's do it better: use the already constructed fillPath but clip it
-        drawContext.canvas.save()
-        drawContext.canvas.clipRect(0f, 0f, width * animatedProgress.value, height)
-        
-        fillPath.lineTo(width, height)
-        fillPath.lineTo(0f, height)
-        fillPath.close()
+        val animatedPath = android.graphics.Path()
+        pathMeasure.getSegment(0f, length * animatedProgress.value, animatedPath, true)
 
         drawPath(
-            path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.2f), Color.Transparent),
-                startY = 0f,
-                endY = height
-            )
+            path = animatedPath.asComposePath(),
+            color = overallTrendColor,
+            style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
-        drawContext.canvas.restore()
     }
 }

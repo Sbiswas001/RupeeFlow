@@ -1,5 +1,8 @@
 package sayan.apps.rupeeflow.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Budget(
     val id: Long,
     val categoryId: Long,
